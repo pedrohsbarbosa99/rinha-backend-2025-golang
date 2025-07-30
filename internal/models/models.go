@@ -1,4 +1,4 @@
-package service
+package models
 
 type PaymentPost struct {
 	CorrelationId string  `json:"correlationId"`

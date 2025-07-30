@@ -1,9 +1,10 @@
-package service
+package processor
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gorinha/internal/config"
 	"io"
 	"log"
 	"net/http"
@@ -60,7 +61,7 @@ func ChoiceProcessor() (url string, processor string) {
 }
 
 func WorkerChecker() {
-	c := Config{}
+	c := config.Config{}
 	env := c.LoadEnv()
 	ctx := context.Background()
 	client := redis.NewClient(&redis.Options{

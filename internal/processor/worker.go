@@ -1,4 +1,4 @@
-package service
+package processor
 
 import (
 	"bytes"
@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gorinha/internal/config"
+	"gorinha/internal/models"
 	"net/http"
 	"strings"
 	"time"
@@ -13,9 +15,9 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-var queue chan PaymentPost
+var queue chan models.PaymentPost
 
-func AddToQueue(payment PaymentPost) {
+func AddToQueue(payment models.PaymentPost) {
 	queue <- payment
 }
 
@@ -33,7 +35,7 @@ func getProcessor(ctx context.Context) (processor string, url string) {
 
 }
 
-func PostPayment(payment PaymentPost, url string) (
+func PostPayment(payment models.PaymentPost, url string) (
 	requestedAt time.Time,
 	err error,
 ) {
@@ -68,7 +70,7 @@ func PostPayment(payment PaymentPost, url string) (
 }
 
 func Worker() {
-	c := Config{}
+	c := config.Config{}
 	env := c.LoadEnv()
 	ctx := context.Background()
 	client = redis.NewClient(&redis.Options{
@@ -77,7 +79,7 @@ func Worker() {
 		DB:       0,
 		Protocol: 2,
 	})
-	queue = make(chan PaymentPost, 20000)
+	queue = make(chan models.PaymentPost, 20000)
 
 	for {
 		for payment := range queue {

@@ -2,20 +2,22 @@ package main
 
 import (
 	"fmt"
+	"gorinha/internal/models"
+	"gorinha/internal/processor"
+
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
-	"gorinha/service"
 )
 
 func PostPayments(c *gin.Context) {
-	var p service.PaymentPost
+	var p models.PaymentPost
 
 	err := c.ShouldBind(&p)
 	if err != nil {
 		fmt.Println("PESSIMO PAYLOAD", err.Error())
 	}
 
-	go service.AddToQueue(p)
+	go processor.AddToQueue(p)
 	if err != nil {
 		fmt.Println("Deu RUIM", err.Error())
 	}
@@ -31,9 +33,9 @@ func GetSummary(c *gin.Context) {
 }
 
 func main() {
-	go service.WorkerChecker()
+	go processor.WorkerChecker()
 	for range 2 {
-		go service.Worker()
+		go processor.Worker()
 	}
 	router := gin.Default()
 	router.POST("/payments", PostPayments)
