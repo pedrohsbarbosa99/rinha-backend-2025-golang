@@ -7,7 +7,10 @@ RUN go mod download
 
 COPY . ./
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/api
+ARG APP_ENTRY=./cmd/api
+ARG OUTPUT_NAME=main
+
+RUN CGO_ENABLED=0 GOOS=linux go build -o ${OUTPUT_NAME} ${APP_ENTRY}
 
 FROM alpine:latest
 
@@ -15,7 +18,10 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /app
 
-COPY --from=builder /app/main .
+ARG OUTPUT_NAME=main
+COPY --from=builder /app/${OUTPUT_NAME} .
+
+RUN chmod +x /app/${OUTPUT_NAME}
 
 EXPOSE 8080
 
