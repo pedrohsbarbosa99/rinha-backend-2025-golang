@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"gorinha/internal/config"
 	"gorinha/internal/models"
+	"gorinha/internal/processor"
 
 	"github.com/fasthttp/router"
 	"github.com/redis/go-redis/v9"
@@ -13,27 +14,18 @@ import (
 )
 
 var client *redis.Client
+var queue chan models.PaymentPost
 
-func AddToQueue(payment models.PaymentPost, ctx context.Context) {
-	data, err := json.Marshal(payment)
-	if err != nil {
-		return
-	}
-
-	client.LPush(ctx, "payment_queue", data).Err()
+func AddToQueue(ctx context.Context, body []byte, q <-chan models.PaymentPost) {
+	var payment models.PaymentPost
+	json.Unmarshal(body, &payment)
+	queue <- payment
 }
 
 func PostPayments(ctx *fasthttp.RequestCtx) {
-	var p models.PaymentPost
+	body := ctx.PostBody()
 
-	err := json.Unmarshal(ctx.PostBody(), &p)
-	if err != nil {
-		fmt.Println("PÉSSIMO PAYLOAD", err.Error())
-		ctx.SetStatusCode(fasthttp.StatusBadRequest)
-		return
-	}
-
-	go AddToQueue(p, ctx)
+	go AddToQueue(ctx, body, queue)
 
 	ctx.SetStatusCode(fasthttp.StatusAccepted)
 }
@@ -52,8 +44,27 @@ func GetSummary(ctx *fasthttp.RequestCtx) {
 	// from := string(ctx.QueryArgs().Peek("from"))
 	// to := string(ctx.QueryArgs().Peek("to"))
 
+	defaults, err := client.ZRangeByScore(ctx, "payments:default", &redis.ZRangeBy{
+		Min: "-inf",
+		Max: "+inf",
+	}).Result()
+
+	fallbacks, err := client.ZRangeByScore(ctx, "payments:fallback", &redis.ZRangeBy{
+		Min: "-inf",
+		Max: "+inf",
+	}).Result()
+
+	for range defaults {
+		summary["default"].TotalRequests++
+		summary["default"].TotalAmount += 19.90
+	}
+	for range fallbacks {
+		summary["fallback"].TotalRequests++
+		summary["fallback"].TotalAmount += 19.90
+	}
+	fmt.Println("SUMMARY: ", len(fallbacks), len(defaults))
+
 	resp, err := json.Marshal(summary)
-	fmt.Println("SUMMARY: ", summary)
 	if err != nil {
 		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
 		ctx.SetBodyString(`{"error": "internal error"}`)
@@ -66,6 +77,7 @@ func GetSummary(ctx *fasthttp.RequestCtx) {
 }
 
 func main() {
+	queue = make(chan models.PaymentPost, 10000)
 	c := config.Config{}
 	env := c.LoadEnv()
 
@@ -74,8 +86,9 @@ func main() {
 		Password:       "",
 		DB:             0,
 		Protocol:       2,
-		MaxActiveConns: 100,
+		MaxActiveConns: 50,
 	})
+	go processor.WorkerPayments(client, queue)
 
 	r := router.New()
 	r.POST("/payments", PostPayments)
