@@ -32,8 +32,6 @@ func PostPayment(amount float32, cid, url string) (requestedAt time.Time, err er
 	if err != nil {
 		return
 	}
-	defer res.Body.Close()
-	fmt.Println("STATUS: ", res.StatusCode)
 
 	if res.StatusCode != 200 {
 		return requestedAt, errors.New("erro na requisição para o processador")

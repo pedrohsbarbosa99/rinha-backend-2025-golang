@@ -1,12 +1,12 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"gorinha/internal/config"
 	"gorinha/internal/models"
 	"gorinha/internal/processor"
+	"time"
 
 	"github.com/fasthttp/router"
 	"github.com/redis/go-redis/v9"
@@ -14,25 +14,26 @@ import (
 )
 
 var client *redis.Client
-var queue chan models.PaymentPost
 
-func AddToQueue(ctx context.Context, body []byte, q <-chan models.PaymentPost) {
-	var payment models.PaymentPost
-	json.Unmarshal(body, &payment)
-	queue <- payment
-}
+var paymentPending chan models.Payment
 
 func PostPayments(ctx *fasthttp.RequestCtx) {
-	body := ctx.PostBody()
-
-	go AddToQueue(ctx, body, queue)
-
 	ctx.SetStatusCode(fasthttp.StatusAccepted)
+	body := ctx.PostBody()
+	var p models.PaymentPost
+	err := json.Unmarshal(body, &p)
+	if err != nil {
+		ctx.SetStatusCode(fasthttp.StatusBadRequest)
+		return
+	}
+
+	go processor.AddToQueue(ctx, p)
+
 }
 
 type Summary struct {
 	TotalRequests int     `json:"totalRequests"`
-	TotalAmount   float64 `json:"totalAmount"`
+	TotalAmount   float32 `json:"totalAmount"`
 }
 
 func GetSummary(ctx *fasthttp.RequestCtx) {
@@ -40,29 +41,48 @@ func GetSummary(ctx *fasthttp.RequestCtx) {
 		"default":  {TotalRequests: 0, TotalAmount: 0},
 		"fallback": {TotalRequests: 0, TotalAmount: 0},
 	}
+	fromStr := string(ctx.QueryArgs().Peek("from"))
+	toStr := string(ctx.QueryArgs().Peek("to"))
 
-	// from := string(ctx.QueryArgs().Peek("from"))
-	// to := string(ctx.QueryArgs().Peek("to"))
+	from := int64(0)
+	to := time.Date(2400, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
 
-	defaults, err := client.ZRangeByScore(ctx, "payments:default", &redis.ZRangeBy{
-		Min: "-inf",
-		Max: "+inf",
-	}).Result()
-
-	fallbacks, err := client.ZRangeByScore(ctx, "payments:fallback", &redis.ZRangeBy{
-		Min: "-inf",
-		Max: "+inf",
-	}).Result()
-
-	for range defaults {
-		summary["default"].TotalRequests++
-		summary["default"].TotalAmount += 19.90
+	if fromStr != "" {
+		t, err := time.Parse(time.RFC3339Nano, fromStr)
+		if err == nil {
+			from = t.UnixNano()
+		}
 	}
-	for range fallbacks {
-		summary["fallback"].TotalRequests++
-		summary["fallback"].TotalAmount += 19.90
+
+	if toStr != "" {
+		t, err := time.Parse(time.RFC3339Nano, toStr)
+		if err == nil {
+			to = t.UnixNano()
+		}
 	}
-	fmt.Println("SUMMARY: ", len(fallbacks), len(defaults))
+
+	zs, err := client.ZRangeByScore(
+		ctx,
+		"payments",
+		&redis.ZRangeBy{
+			Min: fmt.Sprintf("%d", from),
+			Max: fmt.Sprintf("%d", to),
+		}).Result()
+
+	if err != nil {
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+		ctx.SetBodyString(`{"error": "failed to fetch data"}`)
+		return
+	}
+
+	for _, val := range zs {
+		var p models.Payment
+		if err := json.Unmarshal([]byte(val), &p); err != nil {
+			continue
+		}
+		summary[p.Processor].TotalRequests++
+		summary[p.Processor].TotalAmount += p.Amount
+	}
 
 	resp, err := json.Marshal(summary)
 	if err != nil {
@@ -77,7 +97,7 @@ func GetSummary(ctx *fasthttp.RequestCtx) {
 }
 
 func main() {
-	queue = make(chan models.PaymentPost, 10000)
+	paymentPending = make(chan models.Payment, 100_000)
 	c := config.Config{}
 	env := c.LoadEnv()
 
@@ -88,7 +108,8 @@ func main() {
 		Protocol:       2,
 		MaxActiveConns: 50,
 	})
-	go processor.WorkerPayments(client, queue)
+	go processor.WorkerPayments(paymentPending)
+	go processor.WorkerDatabase(client, paymentPending)
 
 	r := router.New()
 	r.POST("/payments", PostPayments)

@@ -1,68 +1,54 @@
 package processor
 
 import (
-	"context"
-	"fmt"
 	"gorinha/external/getway"
-	"gorinha/internal/database"
 	"gorinha/internal/models"
 	"sync"
-	"time"
-
-	"github.com/redis/go-redis/v9"
 )
 
-func processPayment(ctx context.Context, c *redis.Client, payment models.PaymentPost) (requestedAt time.Time, processor string, err error) {
-	fmt.Println("Processando pagamento:", payment.CorrelationId)
-	requestedAt, err = getway.PostPayment(
-		payment.Amount,
-		payment.CorrelationId,
+func processPayment(p models.PaymentPost, paymentPending chan models.Payment) (err error) {
+	requestedAt, err := getway.PostPayment(
+		p.Amount,
+		p.CorrelationId,
 		env.PROCESSOR_DEFAULT_URL,
 	)
 	if err != nil {
 		requestedAt, err = getway.PostPayment(
-			payment.Amount,
-			payment.CorrelationId,
+			p.Amount,
+			p.CorrelationId,
 			env.PROCESSOR_FALLBACK_URL,
 		)
 		if err == nil {
-			database.AddPayment(
-				ctx,
-				c,
-				payment.CorrelationId,
-				"fallback",
-				payment.Amount,
-				requestedAt,
-			)
+			paymentPending <- models.Payment{
+				CorrelationId: p.CorrelationId,
+				Amount:        p.Amount,
+				RequestedAt:   requestedAt,
+				Processor:     "fallback",
+			}
 		}
 	} else {
-		database.AddPayment(
-			ctx,
-			c,
-			payment.CorrelationId,
-			"default",
-			payment.Amount,
-			requestedAt,
-		)
+		paymentPending <- models.Payment{
+			CorrelationId: p.CorrelationId,
+			Amount:        p.Amount,
+			RequestedAt:   requestedAt,
+			Processor:     "default",
+		}
 	}
 	return
+
 }
 
 func processPayments(
-	ctx context.Context,
-	c *redis.Client,
 	payments []models.PaymentPost,
 	wg *sync.WaitGroup,
+	paymentPending chan models.Payment,
 ) {
 	for _, p := range payments {
-		payment := p
 		wg.Add(1)
-		go func() {
+		payment := p
+		go func(payment models.PaymentPost) {
 			defer wg.Done()
-			_, _, err := processPayment(ctx, c, payment)
-			if err != nil {
-				fmt.Println("Erro ao processar pagamento:", err)
-			}
-		}()
+			processPayment(payment, paymentPending)
+		}(payment)
 	}
 }

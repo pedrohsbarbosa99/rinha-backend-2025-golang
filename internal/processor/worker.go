@@ -3,31 +3,73 @@ package processor
 import (
 	"context"
 	"gorinha/internal/config"
+	"gorinha/internal/database"
 	"gorinha/internal/models"
 	"sync"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
 
 var env config.Env
 
-func WorkerPayments(client *redis.Client, q <-chan models.PaymentPost) {
+var queue chan models.PaymentPost
+
+func AddToQueue(ctx context.Context, payment models.PaymentPost) {
+	queue <- payment
+}
+
+func WorkerPayments(paymentPending chan models.Payment) {
+	queue = make(chan models.PaymentPost, 100_000)
+	var wg sync.WaitGroup
 	c := config.Config{}
 	env = c.LoadEnv()
-	ctx := context.Background()
 
-	const batchSize = 30
+	const batchSize = 25
 
 	for {
 		var payments []models.PaymentPost
 
 		for range batchSize {
-			payment := <-q
+			payment := <-queue
 			payments = append(payments, payment)
 		}
 
-		var wg sync.WaitGroup
-		processPayments(ctx, client, payments, &wg)
+		processPayments(payments, &wg, paymentPending)
 		wg.Wait()
+	}
+}
+
+func WorkerDatabase(client *redis.Client, paymentPending chan models.Payment) {
+	ctx := context.Background()
+	const batchSize = 25
+	const flushInterval = 500 * time.Microsecond
+
+	buffer := make([]models.Payment, 0, batchSize)
+	timer := time.NewTimer(flushInterval)
+
+	for {
+
+		select {
+		case payment := <-paymentPending:
+			buffer = append(buffer, payment)
+
+			if len(buffer) >= batchSize {
+				database.AddPayments(ctx, client, buffer)
+				buffer = buffer[:0]
+				if !timer.Stop() {
+					<-timer.C
+				}
+				timer.Reset(flushInterval)
+			}
+
+		case <-timer.C:
+			if len(buffer) > 0 {
+				database.AddPayments(ctx, client, buffer)
+				buffer = buffer[:0]
+			}
+			timer.Reset(flushInterval)
+		}
+
 	}
 }
