@@ -5,6 +5,7 @@ import (
 	"gorinha/internal/config"
 	"gorinha/internal/database"
 	"gorinha/internal/models"
+	"net/http"
 	"sync"
 	"time"
 
@@ -20,12 +21,13 @@ func AddToQueue(ctx context.Context, payment models.PaymentPost) {
 }
 
 func WorkerPayments(paymentPending chan models.Payment) {
-	queue = make(chan models.PaymentPost, 100_000)
+	httpClient := &http.Client{Timeout: 4 * time.Second}
+	queue = make(chan models.PaymentPost, 10_000)
 	var wg sync.WaitGroup
 	c := config.Config{}
 	env = c.LoadEnv()
 
-	const batchSize = 25
+	const batchSize = 35
 
 	for {
 		var payments []models.PaymentPost
@@ -35,15 +37,15 @@ func WorkerPayments(paymentPending chan models.Payment) {
 			payments = append(payments, payment)
 		}
 
-		processPayments(payments, &wg, paymentPending)
+		processPayments(httpClient, payments, &wg, paymentPending)
 		wg.Wait()
 	}
 }
 
 func WorkerDatabase(client *redis.Client, paymentPending chan models.Payment) {
 	ctx := context.Background()
-	const batchSize = 25
-	const flushInterval = 500 * time.Microsecond
+	const batchSize = 45
+	const flushInterval = 100 * time.Microsecond
 
 	buffer := make([]models.Payment, 0, batchSize)
 	timer := time.NewTimer(flushInterval)

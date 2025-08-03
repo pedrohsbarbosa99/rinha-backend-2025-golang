@@ -9,8 +9,7 @@ import (
 	"time"
 )
 
-func PostPayment(amount float32, cid, url string) (requestedAt time.Time, err error) {
-	httpClient := &http.Client{Timeout: 2 * time.Second}
+func PostPayment(client *http.Client, amount float32, cid, url string) (requestedAt time.Time, err error) {
 	requestedAt = time.Now().UTC()
 
 	data := map[string]any{
@@ -24,7 +23,7 @@ func PostPayment(amount float32, cid, url string) (requestedAt time.Time, err er
 		return
 	}
 
-	res, err := httpClient.Post(
+	res, err := client.Post(
 		fmt.Sprintf("%s/payments", url),
 		"application/json",
 		bytes.NewBuffer(payload),
@@ -32,6 +31,7 @@ func PostPayment(amount float32, cid, url string) (requestedAt time.Time, err er
 	if err != nil {
 		return
 	}
+	defer res.Body.Close()
 
 	if res.StatusCode != 200 {
 		return requestedAt, errors.New("erro na requisição para o processador")

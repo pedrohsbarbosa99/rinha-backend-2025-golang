@@ -18,7 +18,6 @@ var client *redis.Client
 var paymentPending chan models.Payment
 
 func PostPayments(ctx *fasthttp.RequestCtx) {
-	ctx.SetStatusCode(fasthttp.StatusAccepted)
 	body := ctx.PostBody()
 	var p models.PaymentPost
 	err := json.Unmarshal(body, &p)
@@ -28,6 +27,7 @@ func PostPayments(ctx *fasthttp.RequestCtx) {
 	}
 
 	go processor.AddToQueue(ctx, p)
+	ctx.SetStatusCode(fasthttp.StatusAccepted)
 
 }
 
@@ -106,7 +106,7 @@ func main() {
 		Password:       "",
 		DB:             0,
 		Protocol:       2,
-		MaxActiveConns: 50,
+		MaxActiveConns: 100,
 	})
 	go processor.WorkerPayments(paymentPending)
 	go processor.WorkerDatabase(client, paymentPending)

@@ -20,12 +20,13 @@ type HealthReturn struct {
 func GetHealth(url string) (h HealthReturn) {
 	fullURL := fmt.Sprintf("%s/payments/service-health", url)
 	fmt.Printf("[LOG] [GetHealth] Verificando health de: %s\n", fullURL)
-	
+
 	res, err := http.Get(fullURL)
 	if err != nil {
 		fmt.Printf("[LOG] [GetHealth] Erro ao fazer request para %s: %v\n", fullURL, err)
 		return
 	}
+	fmt.Println("STATUS: ", res.StatusCode)
 
 	defer res.Body.Close()
 
@@ -45,36 +46,32 @@ func GetHealth(url string) (h HealthReturn) {
 	return
 }
 
-func ChoiceProcessor() (url string, processor string) {
+func ChoiceProcessor() (url string, processor string, fail bool) {
 	healthDefault := GetHealth("http://payment-processor-default:8080")
-	fmt.Printf("[LOG] [ChoiceProcessor] Health Default: failing=%v, minResponseTime=%d\n", healthDefault.Failing, healthDefault.MinResponseTime)
-	
+	url = "http://payment-processor-default:8080"
+	processor = "default"
+	fail = healthDefault.Failing
+
 	if !healthDefault.Failing {
 		if healthDefault.MinResponseTime < 130 {
-			url = "http://payment-processor-default:8080"
-			processor = "default"
-			fmt.Printf("[LOG] [ChoiceProcessor] Selecionado DEFAULT: %s -> %s\n", processor, url)
 			return
 		}
 	}
 
 	healthFallback := GetHealth("http://payment-processor-fallback:8080")
-	fmt.Printf("[LOG] [ChoiceProcessor] Health Fallback: failing=%v, minResponseTime=%d\n", healthFallback.Failing, healthFallback.MinResponseTime)
-	
+
 	if !healthFallback.Failing {
 		if !healthDefault.Failing &&
 			(float32(healthDefault.MinResponseTime) >
 				float32(healthFallback.MinResponseTime)*1.2) {
 			url = "http://payment-processor-fallback:8080"
 			processor = "fallback"
-			fmt.Printf("[LOG] [ChoiceProcessor] Selecionado FALLBACK: %s -> %s\n", processor, url)
-		} else {
-			fmt.Printf("[LOG] [ChoiceProcessor] Mantendo DEFAULT (fallback não é melhor)\n")
+			fail = healthFallback.Failing
+			return
 		}
-		return
 	}
-	
-	fmt.Printf("[LOG] [ChoiceProcessor] Nenhum processador disponível\n")
+
+	fail = true
 	return
 }
 
@@ -82,30 +79,16 @@ func WorkerChecker(client *redis.Client) {
 	c := config.Config{}
 	env := c.LoadEnv()
 	ctx := context.Background()
-	
-	// Inicializar com default
-	initialValue := fmt.Sprintf("default##%s", env.PROCESSOR_DEFAULT_URL)
-	fmt.Printf("[LOG] [WorkerChecker] Inicializando processor com: %s\n", initialValue)
-	err := client.Set(ctx, "processor", initialValue, 10*time.Second).Err()
-	if err != nil {
-		fmt.Printf("[LOG] [WorkerChecker] Erro ao inicializar processor: %v\n", err)
-	}
+
+	initialValue := fmt.Sprintf("default##%s##false", env.PROCESSOR_DEFAULT_URL)
+	client.Set(ctx, "processor", initialValue, 10*time.Second).Err()
 
 	for {
-		url, processor := ChoiceProcessor()
+		url, processor, fail := ChoiceProcessor()
 		fmt.Printf("[LOG] [WorkerChecker] SELECIONANDO: %s -> %s\n", processor, url)
-		
-		if url != "" && processor != "" {
-			newValue := fmt.Sprintf("%s##%s", processor, url)
-			fmt.Printf("[LOG] [WorkerChecker] Atualizando processor para: %s\n", newValue)
-			err := client.Set(ctx, "processor", newValue, 10*time.Second).Err()
-			if err != nil {
-				fmt.Printf("[LOG] [WorkerChecker] Erro ao atualizar processor: %v\n", err)
-			}
-		} else {
-			fmt.Printf("[LOG] [WorkerChecker] Nenhum processador selecionado, mantendo atual\n")
-		}
-		
-		time.Sleep(5 * time.Second)
+
+		newValue := fmt.Sprintf("%s##%s##%v", processor, url, fail)
+		client.Set(ctx, "processor", newValue, 10*time.Second).Err()
+
 	}
 }
