@@ -5,8 +5,6 @@ import (
 	"gorinha/internal/config"
 	"gorinha/internal/models"
 	"net/http"
-	"sync"
-	"time"
 )
 
 func processPayment(client *http.Client, p models.PaymentRequest, paymentPending chan models.Payment) (err error) {
@@ -41,24 +39,23 @@ func processPayment(client *http.Client, p models.PaymentRequest, paymentPending
 			return
 		}
 	}
-	time.Sleep(2 * time.Second)
 	queue <- p
 	return
 
 }
 
-func processPayments(
-	client *http.Client,
-	payments []models.PaymentRequest,
-	wg *sync.WaitGroup,
-	paymentPending chan models.Payment,
-) {
-	for _, p := range payments {
-		wg.Add(1)
-		payment := p
-		go func(payment models.PaymentRequest) {
-			defer wg.Done()
-			processPayment(client, payment, paymentPending)
-		}(payment)
-	}
-}
+// func processPayments(
+// 	client *http.Client,
+// 	payments []models.PaymentRequest,
+// 	wg *sync.WaitGroup,
+// 	paymentPending chan models.Payment,
+// ) {
+// 	for _, p := range payments {
+// 		wg.Add(1)
+// 		payment := p
+// 		go func(payment models.PaymentRequest) {
+// 			defer wg.Done()
+// 			processPayment(client, payment, paymentPending)
+// 		}(payment)
+// 	}
+// }

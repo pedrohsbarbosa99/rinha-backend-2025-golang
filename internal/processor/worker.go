@@ -5,7 +5,6 @@ import (
 	"gorinha/internal/database"
 	"gorinha/internal/models"
 	"net/http"
-	"sync"
 	"time"
 
 	goJson "github.com/goccy/go-json"
@@ -21,6 +20,7 @@ func AddToQueue(body []byte) {
 		return
 	}
 	p.RequestedAt = time.Now().UTC()
+
 	queue <- p
 }
 
@@ -29,27 +29,31 @@ func WorkerPayments(paymentPending chan models.Payment) {
 
 	queue = make(chan models.PaymentRequest, 10_000)
 
-	var wg sync.WaitGroup
+	// var wg sync.WaitGroup
 
-	const batchSize = 10
+	// const batchSize = 1
 
 	for {
-		var payments []models.PaymentRequest
+		// var payments []models.PaymentRequest
 
-		for range batchSize {
-			payment := <-queue
-			payments = append(payments, payment)
+		payment := <-queue
+		err := processPayment(httpClient, payment, paymentPending)
+		if err != nil {
+			time.Sleep(time.Second)
 		}
+		// for range batchSize {
+		// 	payments = append(payments, payment)
+		// }
 
-		processPayments(httpClient, payments, &wg, paymentPending)
-		wg.Wait()
+		// processPayments(httpClient, payments, &wg, paymentPending)
+		// wg.Wait()
 	}
 }
 
 func WorkerDatabase(client *redis.Client, paymentPending chan models.Payment) {
 	ctx := context.Background()
-	const batchSize = 45
-	const flushInterval = 150 * time.Microsecond
+	const batchSize = 500
+	const flushInterval = 200 * time.Microsecond
 
 	buffer := make([]models.Payment, 0, batchSize)
 	timer := time.NewTimer(flushInterval)
