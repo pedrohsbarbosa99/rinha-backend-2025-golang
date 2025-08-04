@@ -48,8 +48,8 @@ func WorkerPayments(paymentPending chan models.Payment) {
 
 func WorkerDatabase(client *redis.Client, paymentPending chan models.Payment) {
 	ctx := context.Background()
-	const batchSize = 300
-	const flushInterval = 200 * time.Microsecond
+	const batchSize = 45
+	const flushInterval = 150 * time.Microsecond
 
 	buffer := make([]models.Payment, 0, batchSize)
 	timer := time.NewTimer(flushInterval)
