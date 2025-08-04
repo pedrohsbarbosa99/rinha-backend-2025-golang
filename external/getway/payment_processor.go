@@ -2,21 +2,21 @@ package getway
 
 import (
 	"bytes"
+	"gorinha/internal/models"
+	"io"
 
 	"errors"
 	"fmt"
-	goJson "github.com/goccy/go-json"
 	"net/http"
-	"time"
+
+	goJson "github.com/goccy/go-json"
 )
 
-func PostPayment(client *http.Client, amount float32, cid, url string) (requestedAt time.Time, err error) {
-	requestedAt = time.Now().UTC()
-
+func PostPayment(client *http.Client, p models.PaymentRequest, url string) (err error) {
 	data := map[string]any{
-		"correlationId": cid,
-		"amount":        amount,
-		"requestedAt":   requestedAt,
+		"correlationId": p.CorrelationId,
+		"amount":        p.Amount,
+		"requestedAt":   p.RequestedAt,
 	}
 
 	payload, err := goJson.Marshal(data)
@@ -34,8 +34,10 @@ func PostPayment(client *http.Client, amount float32, cid, url string) (requeste
 	}
 	defer res.Body.Close()
 
+	_, _ = io.Copy(io.Discard, res.Body)
+
 	if res.StatusCode != 200 && res.StatusCode != 422 {
-		return requestedAt, errors.New("erro na requisição para o processador")
+		return errors.New("erro na requisição para o processador")
 	}
 
 	return

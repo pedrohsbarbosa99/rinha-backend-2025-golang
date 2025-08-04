@@ -9,27 +9,24 @@ import (
 	"time"
 )
 
-func processPayment(client *http.Client, p models.PaymentPost, paymentPending chan models.Payment) (err error) {
-
-	requestedAt, err := getway.PostPayment(
-		client,
-		p.Amount,
-		p.CorrelationId,
-		config.PROCESSOR_DEFAULT_URL,
-	)
+func processPayment(client *http.Client, p models.PaymentRequest, paymentPending chan models.Payment) (err error) {
 	for range 2 {
+		err = getway.PostPayment(
+			client,
+			p,
+			config.PROCESSOR_DEFAULT_URL,
+		)
 		if err != nil {
-			requestedAt, err = getway.PostPayment(
+			err = getway.PostPayment(
 				client,
-				p.Amount,
-				p.CorrelationId,
+				p,
 				config.PROCESSOR_FALLBACK_URL,
 			)
 			if err == nil {
 				paymentPending <- models.Payment{
 					CorrelationId: p.CorrelationId,
 					Amount:        p.Amount,
-					RequestedAt:   requestedAt,
+					RequestedAt:   p.RequestedAt,
 					Processor:     "fallback",
 				}
 				return
@@ -38,7 +35,7 @@ func processPayment(client *http.Client, p models.PaymentPost, paymentPending ch
 			paymentPending <- models.Payment{
 				CorrelationId: p.CorrelationId,
 				Amount:        p.Amount,
-				RequestedAt:   requestedAt,
+				RequestedAt:   p.RequestedAt,
 				Processor:     "default",
 			}
 			return
@@ -52,14 +49,14 @@ func processPayment(client *http.Client, p models.PaymentPost, paymentPending ch
 
 func processPayments(
 	client *http.Client,
-	payments []models.PaymentPost,
+	payments []models.PaymentRequest,
 	wg *sync.WaitGroup,
 	paymentPending chan models.Payment,
 ) {
 	for _, p := range payments {
 		wg.Add(1)
 		payment := p
-		go func(payment models.PaymentPost) {
+		go func(payment models.PaymentRequest) {
 			defer wg.Done()
 			processPayment(client, payment, paymentPending)
 		}(payment)

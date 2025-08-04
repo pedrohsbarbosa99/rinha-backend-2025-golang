@@ -12,28 +12,29 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-var queue chan models.PaymentPost
+var queue chan models.PaymentRequest
 
 func AddToQueue(body []byte) {
-	var p models.PaymentPost
+	var p models.PaymentRequest
 	err := goJson.Unmarshal(body, &p)
 	if err != nil {
 		return
 	}
+	p.RequestedAt = time.Now().UTC()
 	queue <- p
 }
 
 func WorkerPayments(paymentPending chan models.Payment) {
 	httpClient := &http.Client{Timeout: 4 * time.Second}
 
-	queue = make(chan models.PaymentPost, 10_000)
+	queue = make(chan models.PaymentRequest, 10_000)
 
 	var wg sync.WaitGroup
 
 	const batchSize = 10
 
 	for {
-		var payments []models.PaymentPost
+		var payments []models.PaymentRequest
 
 		for range batchSize {
 			payment := <-queue
@@ -48,7 +49,7 @@ func WorkerPayments(paymentPending chan models.Payment) {
 func WorkerDatabase(client *redis.Client, paymentPending chan models.Payment) {
 	ctx := context.Background()
 	const batchSize = 300
-	const flushInterval = 450 * time.Microsecond
+	const flushInterval = 350 * time.Microsecond
 
 	buffer := make([]models.Payment, 0, batchSize)
 	timer := time.NewTimer(flushInterval)

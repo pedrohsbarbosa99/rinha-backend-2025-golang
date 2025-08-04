@@ -17,6 +17,11 @@ var client *redis.Client
 
 var paymentPending chan models.Payment
 
+func purgePayments(ctx *fasthttp.RequestCtx) {
+	client.FlushAll(ctx)
+	ctx.SetStatusCode(fasthttp.StatusAccepted)
+}
+
 func PostPayments(ctx *fasthttp.RequestCtx) {
 	ctx.SetStatusCode(fasthttp.StatusAccepted)
 	body := ctx.PostBody()
@@ -103,6 +108,7 @@ func main() {
 	go processor.WorkerDatabase(client, paymentPending)
 
 	r := router.New()
+	r.POST("/purge-payments", purgePayments)
 	r.POST("/payments", PostPayments)
 	r.GET("/payments-summary", GetSummary)
 
