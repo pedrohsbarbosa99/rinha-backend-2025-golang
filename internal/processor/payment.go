@@ -8,7 +8,7 @@ import (
 )
 
 func processPayment(client *http.Client, p models.PaymentRequest, paymentPending chan models.Payment) (err error) {
-	for range 2 {
+	for range 1 {
 		err = getway.PostPayment(
 			client,
 			p,
