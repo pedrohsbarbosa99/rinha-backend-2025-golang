@@ -4,7 +4,7 @@ go 1.24.5
 
 require (
 	github.com/fasthttp/router v1.5.4
-	github.com/lib/pq v1.10.9
+	github.com/goccy/go-json v0.10.5
 	github.com/redis/go-redis/v9 v9.11.0
 	github.com/valyala/fasthttp v1.64.0
 )

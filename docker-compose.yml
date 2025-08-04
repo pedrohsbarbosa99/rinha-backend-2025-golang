@@ -26,7 +26,7 @@ services:
       resources:
         limits:
           cpus: "0.4"
-          memory: 50M
+          memory: 140M
 
   app2:
     build:
@@ -44,7 +44,7 @@ services:
       resources:
         limits:
           cpus: "0.4"
-          memory: 50M
+          memory: 140M
 
   nginx:
     image: nginx:latest

@@ -76,11 +76,9 @@ func ChoiceProcessor() (url string, processor string, fail bool) {
 }
 
 func WorkerChecker(client *redis.Client) {
-	c := config.Config{}
-	env := c.LoadEnv()
 	ctx := context.Background()
 
-	initialValue := fmt.Sprintf("default##%s##false", env.PROCESSOR_DEFAULT_URL)
+	initialValue := fmt.Sprintf("default##%s##false", config.PROCESSOR_DEFAULT_URL)
 	client.Set(ctx, "processor", initialValue, 10*time.Second).Err()
 
 	for {

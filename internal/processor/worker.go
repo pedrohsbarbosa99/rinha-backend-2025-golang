@@ -2,32 +2,35 @@ package processor
 
 import (
 	"context"
-	"gorinha/internal/config"
 	"gorinha/internal/database"
 	"gorinha/internal/models"
 	"net/http"
 	"sync"
 	"time"
 
+	goJson "github.com/goccy/go-json"
 	"github.com/redis/go-redis/v9"
 )
 
-var env config.Env
-
 var queue chan models.PaymentPost
 
-func AddToQueue(ctx context.Context, payment models.PaymentPost) {
-	queue <- payment
+func AddToQueue(body []byte) {
+	var p models.PaymentPost
+	err := goJson.Unmarshal(body, &p)
+	if err != nil {
+		return
+	}
+	queue <- p
 }
 
 func WorkerPayments(paymentPending chan models.Payment) {
 	httpClient := &http.Client{Timeout: 4 * time.Second}
-	queue = make(chan models.PaymentPost, 10_000)
-	var wg sync.WaitGroup
-	c := config.Config{}
-	env = c.LoadEnv()
 
-	const batchSize = 35
+	queue = make(chan models.PaymentPost, 10_000)
+
+	var wg sync.WaitGroup
+
+	const batchSize = 10
 
 	for {
 		var payments []models.PaymentPost
@@ -44,8 +47,8 @@ func WorkerPayments(paymentPending chan models.Payment) {
 
 func WorkerDatabase(client *redis.Client, paymentPending chan models.Payment) {
 	ctx := context.Background()
-	const batchSize = 45
-	const flushInterval = 100 * time.Microsecond
+	const batchSize = 300
+	const flushInterval = 450 * time.Microsecond
 
 	buffer := make([]models.Payment, 0, batchSize)
 	timer := time.NewTimer(flushInterval)

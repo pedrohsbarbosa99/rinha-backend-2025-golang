@@ -2,6 +2,7 @@ package processor
 
 import (
 	"gorinha/external/getway"
+	"gorinha/internal/config"
 	"gorinha/internal/models"
 	"net/http"
 	"sync"
@@ -14,7 +15,7 @@ func processPayment(client *http.Client, p models.PaymentPost, paymentPending ch
 		client,
 		p.Amount,
 		p.CorrelationId,
-		env.PROCESSOR_DEFAULT_URL,
+		config.PROCESSOR_DEFAULT_URL,
 	)
 	for range 2 {
 		if err != nil {
@@ -22,7 +23,7 @@ func processPayment(client *http.Client, p models.PaymentPost, paymentPending ch
 				client,
 				p.Amount,
 				p.CorrelationId,
-				env.PROCESSOR_FALLBACK_URL,
+				config.PROCESSOR_FALLBACK_URL,
 			)
 			if err == nil {
 				paymentPending <- models.Payment{
@@ -43,7 +44,7 @@ func processPayment(client *http.Client, p models.PaymentPost, paymentPending ch
 			return
 		}
 	}
-	time.Sleep(time.Second)
+	time.Sleep(2 * time.Second)
 	queue <- p
 	return
 

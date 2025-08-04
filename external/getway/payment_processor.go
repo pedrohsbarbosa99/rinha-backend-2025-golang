@@ -2,9 +2,10 @@ package getway
 
 import (
 	"bytes"
-	"encoding/json"
+
 	"errors"
 	"fmt"
+	goJson "github.com/goccy/go-json"
 	"net/http"
 	"time"
 )
@@ -18,7 +19,7 @@ func PostPayment(client *http.Client, amount float32, cid, url string) (requeste
 		"requestedAt":   requestedAt,
 	}
 
-	payload, err := json.Marshal(data)
+	payload, err := goJson.Marshal(data)
 	if err != nil {
 		return
 	}
@@ -33,7 +34,7 @@ func PostPayment(client *http.Client, amount float32, cid, url string) (requeste
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode != 200 {
+	if res.StatusCode != 200 && res.StatusCode != 422 {
 		return requestedAt, errors.New("erro na requisição para o processador")
 	}
 

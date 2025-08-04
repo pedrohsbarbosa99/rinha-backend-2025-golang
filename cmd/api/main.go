@@ -18,16 +18,9 @@ var client *redis.Client
 var paymentPending chan models.Payment
 
 func PostPayments(ctx *fasthttp.RequestCtx) {
-	body := ctx.PostBody()
-	var p models.PaymentPost
-	err := json.Unmarshal(body, &p)
-	if err != nil {
-		ctx.SetStatusCode(fasthttp.StatusBadRequest)
-		return
-	}
-
-	go processor.AddToQueue(ctx, p)
 	ctx.SetStatusCode(fasthttp.StatusAccepted)
+	body := ctx.PostBody()
+	go processor.AddToQueue(body)
 
 }
 
@@ -98,11 +91,9 @@ func GetSummary(ctx *fasthttp.RequestCtx) {
 
 func main() {
 	paymentPending = make(chan models.Payment, 100_000)
-	c := config.Config{}
-	env := c.LoadEnv()
 
 	client = redis.NewClient(&redis.Options{
-		Addr:           env.REDIS_URL,
+		Addr:           config.REDIS_URL,
 		Password:       "",
 		DB:             0,
 		Protocol:       2,
