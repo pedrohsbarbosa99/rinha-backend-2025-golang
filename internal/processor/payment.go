@@ -15,20 +15,20 @@ func processPayment(client *http.Client, p models.PaymentRequest, paymentPending
 			config.PROCESSOR_DEFAULT_URL,
 		)
 		if err != nil {
-			err = getway.PostPayment(
-				client,
-				p,
-				config.PROCESSOR_FALLBACK_URL,
-			)
-			if err == nil {
-				paymentPending <- models.Payment{
-					CorrelationId: p.CorrelationId,
-					Amount:        p.Amount,
-					RequestedAt:   p.RequestedAt,
-					Processor:     "fallback",
-				}
-				return
-			}
+			// err = getway.PostPayment(
+			// 	client,
+			// 	p,
+			// 	config.PROCESSOR_FALLBACK_URL,
+			// )
+			// if err == nil {
+			// 	paymentPending <- models.Payment{
+			// 		CorrelationId: p.CorrelationId,
+			// 		Amount:        p.Amount,
+			// 		RequestedAt:   p.RequestedAt,
+			// 		Processor:     "fallback",
+			// 	}
+			// 	return
+			// }
 		} else {
 			paymentPending <- models.Payment{
 				CorrelationId: p.CorrelationId,
