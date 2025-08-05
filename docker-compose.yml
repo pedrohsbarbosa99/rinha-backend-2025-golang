@@ -58,6 +58,7 @@ services:
       - app2
     networks:
       - backend
+      - payment-processor
     deploy:
       resources:
         limits:

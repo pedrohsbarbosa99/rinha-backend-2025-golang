@@ -29,24 +29,16 @@ func WorkerPayments(paymentPending chan models.Payment) {
 
 	queue = make(chan models.PaymentRequest, 10_000)
 
-	// var wg sync.WaitGroup
-
-	// const batchSize = 1
-
 	for {
-		// var payments []models.PaymentRequest
+		if processorHealth.Failing {
+			time.Sleep(2 * time.Second)
+		}
 
 		payment := <-queue
 		err := processPayment(httpClient, payment, paymentPending)
 		if err != nil {
 			time.Sleep(time.Second)
 		}
-		// for range batchSize {
-		// 	payments = append(payments, payment)
-		// }
-
-		// processPayments(httpClient, payments, &wg, paymentPending)
-		// wg.Wait()
 	}
 }
 
