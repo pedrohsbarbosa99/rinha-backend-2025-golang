@@ -104,7 +104,7 @@ func main() {
 		Protocol:       2,
 		MaxActiveConns: 100,
 	})
-	go processor.WorkerChecker()
+	// go processor.WorkerChecker()
 	go processor.WorkerPayments(paymentPending)
 	go processor.WorkerDatabase(client, paymentPending)
 

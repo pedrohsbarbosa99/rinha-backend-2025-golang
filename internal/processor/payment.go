@@ -8,40 +8,43 @@ import (
 )
 
 func processPayment(client *http.Client, p models.PaymentRequest, paymentPending chan models.Payment) (err error) {
-	for range 1 {
+	err = getway.PostPayment(
+		client,
+		p,
+		config.PROCESSOR_DEFAULT_URL,
+	)
+	if err == nil {
+		paymentPending <- models.Payment{
+			CorrelationId: p.CorrelationId,
+			Amount:        p.Amount,
+			RequestedAt:   p.RequestedAt,
+			Processor:     "default",
+		}
+		return
+	} else if p.Err {
 		err = getway.PostPayment(
 			client,
 			p,
-			config.PROCESSOR_DEFAULT_URL,
+			config.PROCESSOR_FALLBACK_URL,
 		)
-		if err != nil {
-			// err = getway.PostPayment(
-			// 	client,
-			// 	p,
-			// 	config.PROCESSOR_FALLBACK_URL,
-			// )
-			// if err == nil {
-			// 	paymentPending <- models.Payment{
-			// 		CorrelationId: p.CorrelationId,
-			// 		Amount:        p.Amount,
-			// 		RequestedAt:   p.RequestedAt,
-			// 		Processor:     "fallback",
-			// 	}
-			// 	return
-			// }
-		} else {
+		if err == nil {
 			paymentPending <- models.Payment{
 				CorrelationId: p.CorrelationId,
 				Amount:        p.Amount,
 				RequestedAt:   p.RequestedAt,
-				Processor:     "default",
+				Processor:     "fallback",
 			}
 			return
+
 		}
 	}
-	queue <- p
+	queue <- models.PaymentRequest{
+		CorrelationId: p.CorrelationId,
+		Amount:        p.Amount,
+		RequestedAt:   p.RequestedAt,
+		Err:           true,
+	}
 	return
-
 }
 
 // func processPayments(

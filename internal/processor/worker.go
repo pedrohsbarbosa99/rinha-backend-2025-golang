@@ -27,12 +27,12 @@ func AddToQueue(body []byte) {
 func WorkerPayments(paymentPending chan models.Payment) {
 	httpClient := &http.Client{Timeout: 4 * time.Second}
 
-	queue = make(chan models.PaymentRequest, 10_000)
+	queue = make(chan models.PaymentRequest, 5_000)
 
 	for {
-		if processorHealth.Failing {
-			time.Sleep(2 * time.Second)
-		}
+		// if processorHealth.Failing {
+		// 	time.Sleep(2 * time.Second)
+		// }
 
 		payment := <-queue
 		err := processPayment(httpClient, payment, paymentPending)
