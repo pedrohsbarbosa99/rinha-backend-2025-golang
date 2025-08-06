@@ -13,5 +13,5 @@ type Payment struct {
 	CorrelationId string
 	Amount        float32
 	RequestedAt   time.Time
-	Processor     string
+	Processor     int8
 }

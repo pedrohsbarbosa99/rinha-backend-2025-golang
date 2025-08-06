@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"gorinha/internal/config"
+	"gorinha/internal/database"
 	"gorinha/internal/models"
 	"gorinha/internal/processor"
 	"time"
@@ -14,13 +14,9 @@ import (
 )
 
 var client *redis.Client
+var db *database.MemClient
 
 var paymentPending chan models.Payment
-
-func purgePayments(ctx *fasthttp.RequestCtx) {
-	client.FlushAll(ctx)
-	ctx.SetStatusCode(fasthttp.StatusAccepted)
-}
 
 func PostPayments(ctx *fasthttp.RequestCtx) {
 	ctx.SetStatusCode(fasthttp.StatusAccepted)
@@ -59,13 +55,7 @@ func GetSummary(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	zs, err := client.ZRangeByScore(
-		ctx,
-		"payments",
-		&redis.ZRangeBy{
-			Min: fmt.Sprintf("%d", from),
-			Max: fmt.Sprintf("%d", to),
-		}).Result()
+	data, err := db.RangeQuery(0, from, to)
 
 	if err != nil {
 		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
@@ -73,17 +63,30 @@ func GetSummary(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	for _, val := range zs {
-		var p models.Payment
-		if err := json.Unmarshal([]byte(val), &p); err != nil {
-			continue
-		}
-		summary[p.Processor].TotalRequests++
-		summary[p.Processor].TotalAmount += p.Amount
+	summary["default"].TotalRequests = len(data)
+	for _, amount := range data {
+		summary["default"].TotalAmount += amount
+
+	}
+
+	data, err = db.RangeQuery(2, from, to)
+
+	if err != nil {
+		fmt.Println(err.Error())
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+		ctx.SetBodyString(`{"error": "failed to fetch data"}`)
+		return
+	}
+
+	summary["fallback"].TotalRequests = len(data)
+	for _, amount := range data {
+		summary["fallback"].TotalAmount += amount
+
 	}
 
 	resp, err := json.Marshal(summary)
 	if err != nil {
+		fmt.Println(err.Error())
 		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
 		ctx.SetBodyString(`{"error": "internal error"}`)
 		return
@@ -97,19 +100,18 @@ func GetSummary(ctx *fasthttp.RequestCtx) {
 func main() {
 	paymentPending = make(chan models.Payment, 100_000)
 
-	client = redis.NewClient(&redis.Options{
-		Addr:           config.REDIS_URL,
-		Password:       "",
-		DB:             0,
-		Protocol:       2,
-		MaxActiveConns: 100,
-	})
-	// go processor.WorkerChecker()
+	// client = redis.NewClient(&redis.Options{
+	// 	Addr:           config.REDIS_URL,
+	// 	Password:       "",
+	// 	DB:             0,
+	// 	Protocol:       2,
+	// 	MaxActiveConns: 100,
+	// })
+	db = database.NewMemClient()
 	go processor.WorkerPayments(paymentPending)
-	go processor.WorkerDatabase(client, paymentPending)
+	go processor.WorkerDatabase(db, paymentPending)
 
 	r := router.New()
-	r.POST("/purge-payments", purgePayments)
 	r.POST("/payments", PostPayments)
 	r.GET("/payments-summary", GetSummary)
 

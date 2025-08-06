@@ -15,10 +15,9 @@ func processPayment(client *http.Client, p models.PaymentRequest, paymentPending
 	)
 	if err == nil {
 		paymentPending <- models.Payment{
-			CorrelationId: p.CorrelationId,
-			Amount:        p.Amount,
-			RequestedAt:   p.RequestedAt,
-			Processor:     "default",
+			Amount:      p.Amount,
+			RequestedAt: p.RequestedAt,
+			Processor:   0,
 		}
 		return
 	} else if p.Err {
@@ -29,10 +28,9 @@ func processPayment(client *http.Client, p models.PaymentRequest, paymentPending
 		)
 		if err == nil {
 			paymentPending <- models.Payment{
-				CorrelationId: p.CorrelationId,
-				Amount:        p.Amount,
-				RequestedAt:   p.RequestedAt,
-				Processor:     "fallback",
+				Amount:      p.Amount,
+				RequestedAt: p.RequestedAt,
+				Processor:   1,
 			}
 			return
 
