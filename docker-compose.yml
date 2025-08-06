@@ -3,9 +3,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        APP_ENTRY: ./cmd/database
-        OUTPUT_NAME: memdb
     command: ["./memdb"]
     volumes:
       - memsock:/tmp
@@ -15,7 +12,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.1"
+          cpus: "0.2"
           memory: 60M
     restart: unless-stopped
 
@@ -23,9 +20,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        APP_ENTRY: ./cmd/api
-        OUTPUT_NAME: main
     command: ["./main"]
     volumes:
       - memsock:/tmp
@@ -49,9 +43,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        APP_ENTRY: ./cmd/api
-        OUTPUT_NAME: main
     command: ["./main"]
     volumes:
       - memsock:/tmp
@@ -87,7 +78,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.2"
+          cpus: "0.1"
           memory: 30M
     restart: unless-stopped
 

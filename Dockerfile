@@ -7,10 +7,9 @@ RUN go mod download
 
 COPY . ./
 
-ARG APP_ENTRY=./cmd/api
-ARG OUTPUT_NAME=main
+RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/api && \
+    CGO_ENABLED=0 GOOS=linux go build -o memdb ./cmd/database
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o ${OUTPUT_NAME} ${APP_ENTRY}
 
 FROM alpine:latest
 
@@ -18,10 +17,9 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /app
 
-ARG OUTPUT_NAME=main
-COPY --from=builder /app/${OUTPUT_NAME} .
+COPY --from=builder /app/main /app/memdb ./
 
-RUN chmod +x /app/${OUTPUT_NAME}
+RUN chmod +x /app/main /app/memdb
 
 EXPOSE 8080
 

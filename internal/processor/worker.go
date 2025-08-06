@@ -22,6 +22,7 @@ func AddToQueue(body []byte) {
 	p.RequestedAt = time.Now().UTC()
 
 	queue <- p
+
 }
 
 func WorkerPayments(paymentPending chan models.Payment) {
@@ -31,10 +32,10 @@ func WorkerPayments(paymentPending chan models.Payment) {
 
 	for {
 		payment := <-queue
-		err := processPayment(httpClient, payment, paymentPending)
-		if err != nil {
-			time.Sleep(time.Second)
-		}
+		processPayment(httpClient, payment, paymentPending)
+		// if err != nil {
+		// 	time.Sleep(time.Second)
+		// }
 
 	}
 }

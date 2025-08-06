@@ -1,7 +1,6 @@
 package database
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -80,20 +79,4 @@ func (c *MemClient) RangeQuery(key int8, fromTs, toTs int64) (amounts []float32,
 		return nil, fmt.Errorf("decode range resp: %w", err)
 	}
 	return
-}
-
-func (c *MemClient) Ping() error {
-	conn, err := c.dial()
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	if _, err := fmt.Fprintf(conn, `{"type":"ping"}`+"\n"); err != nil {
-		return err
-	}
-
-	reader := bufio.NewReader(conn)
-	_, err = reader.ReadBytes('\n') // descarta resposta
-	return err
 }
