@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-func processPayment(client *http.Client, body []byte, paymentPending chan models.Payment) (err error) {
+func processPayment(client *http.Client, p models.PaymentRequest, paymentPending chan models.Payment) (err error) {
 	err = getway.PostPayment(
 		client,
 		p,

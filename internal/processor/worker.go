@@ -11,30 +11,29 @@ import (
 	goJson "github.com/goccy/go-json"
 )
 
-var queue chan []byte
+var queue chan models.PaymentRequest
 
 func AddToQueue(body []byte) {
-	queue <- body
+	var p models.PaymentRequest
+	err := goJson.Unmarshal(body, &p)
+	if err != nil {
+		return
+	}
+	p.RequestedAt = time.Now().UTC()
+	queue <- p
 
 }
 
 func WorkerPayments(paymentPending chan models.Payment) {
 	httpClient := &http.Client{Timeout: 4 * time.Second}
 
-	queue = make(chan []byte, 5_000)
+	queue = make(chan models.PaymentRequest, 5_000)
 
-	var data []byte
+	var payment models.PaymentRequest
 
 	for {
-		data = <-queue
-		var p models.PaymentRequest
-		err := goJson.Unmarshal(data, &p)
-		if err != nil {
-			return
-		}
-		p.RequestedAt = time.Now().UTC()
+		payment = <-queue
 		processPayment(httpClient, payment, paymentPending)
-
 	}
 }
 
@@ -42,7 +41,6 @@ func WorkerDatabase(db *database.MemClient, paymentPending chan models.Payment) 
 	var payment models.Payment
 	for {
 		payment = <-paymentPending
-
 		var buf bytes.Buffer
 
 		binary.Write(&buf, binary.BigEndian, payment.RequestedAt.UnixNano())
