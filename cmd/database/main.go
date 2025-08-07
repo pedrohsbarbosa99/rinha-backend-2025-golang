@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -17,11 +16,6 @@ import (
 const (
 	SocketPath = "/tmp/kvstore.sock"
 )
-
-type Value struct {
-	Timestamp int64   `json:"timestamp"`
-	Amount    float32 `json:"amount"`
-}
 
 type Store struct {
 	mu   sync.RWMutex
@@ -99,14 +93,11 @@ func (srv *Server) Start() error {
 	}
 	srv.listener = listener
 
-	log.Printf("Server listening on %s", SocketPath)
-
 	go srv.handleShutdown()
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Printf("Accept error: %v", err)
 			continue
 		}
 
@@ -119,7 +110,6 @@ func (srv *Server) handleShutdown() {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	<-c
 
-	log.Println("Shutting down server...")
 	if srv.listener != nil {
 		srv.listener.Close()
 	}
@@ -129,7 +119,6 @@ func (srv *Server) handleShutdown() {
 
 func (srv *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
-	log.Printf("Client connected: %s", conn.RemoteAddr())
 
 	scanner := bufio.NewScanner(conn)
 	encoder := json.NewEncoder(conn)
@@ -155,7 +144,6 @@ func (srv *Server) handleConnection(conn net.Conn) {
 
 	}
 
-	log.Printf("Client disconnected: %s", conn.RemoteAddr())
 }
 
 func (srv *Server) ProcessCommandQuery(cmd Command) (amounts []float32) {
@@ -178,6 +166,6 @@ func main() {
 	srv := NewServer()
 
 	if err := srv.Start(); err != nil {
-		log.Fatalf("server exited with error: %v", err)
+		panic("Server down")
 	}
 }

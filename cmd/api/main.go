@@ -9,11 +9,9 @@ import (
 	"time"
 
 	"github.com/fasthttp/router"
-	"github.com/redis/go-redis/v9"
 	"github.com/valyala/fasthttp"
 )
 
-var client *redis.Client
 var db *database.MemClient
 
 var paymentPending chan models.Payment
@@ -100,13 +98,6 @@ func GetSummary(ctx *fasthttp.RequestCtx) {
 func main() {
 	paymentPending = make(chan models.Payment, 100_000)
 
-	// client = redis.NewClient(&redis.Options{
-	// 	Addr:           config.REDIS_URL,
-	// 	Password:       "",
-	// 	DB:             0,
-	// 	Protocol:       2,
-	// 	MaxActiveConns: 100,
-	// })
 	db = database.NewMemClient()
 	go processor.WorkerPayments(paymentPending)
 	go processor.WorkerDatabase(db, paymentPending)
