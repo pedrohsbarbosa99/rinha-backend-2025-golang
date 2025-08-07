@@ -11,17 +11,25 @@ import (
 	goJson "github.com/goccy/go-json"
 )
 
+var requestQueue chan []byte
 var queue chan models.PaymentRequest
 
 func AddToQueue(body []byte) {
-	var p models.PaymentRequest
-	err := goJson.Unmarshal(body, &p)
-	if err != nil {
-		return
-	}
-	p.RequestedAt = time.Now().UTC()
-	queue <- p
+	requestQueue <- body
+}
 
+func WorkerJsonParser() {
+	requestQueue = make(chan []byte, 5_000)
+	for {
+		body := <-requestQueue
+		var p models.PaymentRequest
+		err := goJson.Unmarshal(body, &p)
+		if err != nil {
+			return
+		}
+		p.RequestedAt = time.Now().UTC()
+		queue <- p
+	}
 }
 
 func WorkerPayments(paymentPending chan models.Payment) {

@@ -18,8 +18,7 @@ var paymentPending chan models.Payment
 
 func PostPayments(ctx *fasthttp.RequestCtx) {
 	ctx.SetStatusCode(fasthttp.StatusAccepted)
-	body := ctx.PostBody()
-	go processor.AddToQueue(body)
+	processor.AddToQueue(ctx.PostBody())
 
 }
 
@@ -99,6 +98,7 @@ func main() {
 	paymentPending = make(chan models.Payment, 100_000)
 
 	db = database.NewMemClient()
+	go processor.WorkerJsonParser()
 	go processor.WorkerPayments(paymentPending)
 	go processor.WorkerDatabase(db, paymentPending)
 
