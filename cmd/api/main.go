@@ -98,7 +98,6 @@ func main() {
 	paymentPending = make(chan models.Payment, 100_000)
 
 	db = database.NewMemClient()
-	go processor.WorkerJsonParser()
 	go processor.WorkerPayments(paymentPending)
 	go processor.WorkerDatabase(db, paymentPending)
 

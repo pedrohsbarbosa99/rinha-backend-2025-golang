@@ -7,9 +7,8 @@ RUN go mod download
 
 COPY . ./
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/api && \
-    CGO_ENABLED=0 GOOS=linux go build -o memdb ./cmd/database
-
+RUN GOOS=linux GOARCH=amd64 GOAMD64=v3 CGO_ENABLED=0 go build -o main ./cmd/api && \
+    GOOS=linux GOARCH=amd64 GOAMD64=v3 CGO_ENABLED=0 go build -o memdb ./cmd/database
 
 FROM alpine:latest
 
