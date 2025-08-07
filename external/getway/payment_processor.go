@@ -13,13 +13,11 @@ import (
 )
 
 func PostPayment(client *http.Client, p models.PaymentRequest, url string) (err error) {
-	data := map[string]any{
-		"correlationId": p.CorrelationId,
-		"amount":        p.Amount,
-		"requestedAt":   p.RequestedAt,
-	}
-
-	payload, err := goJson.Marshal(data)
+	payload, err := goJson.Marshal(models.PaymentPayload{
+		CorrelationId: p.CorrelationId,
+		Amount:        p.Amount,
+		RequestedAt:   p.RequestedAt,
+	})
 	if err != nil {
 		return
 	}
@@ -34,7 +32,7 @@ func PostPayment(client *http.Client, p models.PaymentRequest, url string) (err 
 	}
 	defer res.Body.Close()
 
-	_, _ = io.Copy(io.Discard, res.Body)
+	io.Copy(io.Discard, res.Body)
 
 	if res.StatusCode != 200 && res.StatusCode != 422 {
 		return errors.New("erro na requisição para o processador")

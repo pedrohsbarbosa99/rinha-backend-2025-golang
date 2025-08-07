@@ -10,8 +10,13 @@ type PaymentRequest struct {
 }
 
 type Payment struct {
-	CorrelationId string
-	Amount        float32
-	RequestedAt   time.Time
-	Processor     int8
+	Amount      float32
+	RequestedAt time.Time
+	Processor   int8
+}
+
+type PaymentPayload struct {
+	CorrelationId string    `json:"correlationId"`
+	Amount        float32   `json:"amount"`
+	RequestedAt   time.Time `json:"requestedAt"`
 }
