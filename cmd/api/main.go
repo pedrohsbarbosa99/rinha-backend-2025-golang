@@ -6,23 +6,31 @@ import (
 	"gorinha/internal/database"
 	"gorinha/internal/models"
 	"gorinha/internal/processor"
+	"sync"
 	"time"
 
 	"github.com/fasthttp/router"
-	"github.com/redis/go-redis/v9"
 	"github.com/valyala/fasthttp"
 )
 
-var client *redis.Client
 var db *database.MemClient
 
 var paymentPending chan models.Payment
+var paymentRequestQueue = make(chan []byte, 20_000)
+
+var paymentPool = sync.Pool{
+	New: func() any {
+		return make([]byte, 0, 128)
+	},
+}
 
 func PostPayments(ctx *fasthttp.RequestCtx) {
 	ctx.SetStatusCode(fasthttp.StatusAccepted)
-	body := ctx.PostBody()
-	go processor.AddToQueue(body)
-
+	b := paymentPool.Get().([]byte)
+	b = b[:0]
+	b = append(b, ctx.PostBody()...)
+	paymentRequestQueue <- b
+	paymentPool.Put(b[:0])
 }
 
 type Summary struct {
@@ -100,14 +108,8 @@ func GetSummary(ctx *fasthttp.RequestCtx) {
 func main() {
 	paymentPending = make(chan models.Payment, 100_000)
 
-	// client = redis.NewClient(&redis.Options{
-	// 	Addr:           config.REDIS_URL,
-	// 	Password:       "",
-	// 	DB:             0,
-	// 	Protocol:       2,
-	// 	MaxActiveConns: 100,
-	// })
 	db = database.NewMemClient()
+	go processor.AddToQueue(paymentRequestQueue)
 	go processor.WorkerPayments(paymentPending)
 	go processor.WorkerDatabase(db, paymentPending)
 

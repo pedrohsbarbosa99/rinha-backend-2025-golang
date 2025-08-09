@@ -36,12 +36,6 @@ func processPayment(client *http.Client, p models.PaymentRequest, paymentPending
 
 		}
 	}
-	queue <- models.PaymentRequest{
-		CorrelationId: p.CorrelationId,
-		Amount:        p.Amount,
-		RequestedAt:   p.RequestedAt,
-		Err:           true,
-	}
 	return
 }
 
