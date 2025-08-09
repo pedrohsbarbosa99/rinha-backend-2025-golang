@@ -33,9 +33,6 @@ func WorkerPayments(paymentPending chan models.Payment) {
 	for {
 		payment := <-queue
 		processPayment(httpClient, payment, paymentPending)
-		// if err != nil {
-		// 	time.Sleep(time.Second)
-		// }
 
 	}
 }
