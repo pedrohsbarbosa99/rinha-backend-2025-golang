@@ -1,82 +1,38 @@
 package database
 
 import (
-	"encoding/json"
-	"fmt"
-	"net"
-	"os"
-	"time"
+	"gorinha/internal/models"
+	"sync"
 )
 
-const defaultSocket = "/tmp/kvstore.sock"
-
-type MemClient struct {
-	SocketPath string
-	Timeout    time.Duration
-	Conn       net.Conn
+type Store struct {
+	mu   sync.RWMutex
+	data map[int8][]models.PaymentRequest
 }
 
-func NewMemClient() *MemClient {
-	path := os.Getenv("MEMDB_SOCKET")
-	if path == "" {
-		path = defaultSocket
+func NewStore() *Store {
+	return &Store{
+		data: make(map[int8][]models.PaymentRequest),
 	}
-	c := MemClient{
-		SocketPath: path,
-		Timeout:    200 * time.Second,
-	}
-	conn, err := c.dial()
-	if err == nil {
-		c.Conn = conn
-	}
-	return &c
 }
 
-type command struct {
-	Type   string `json:"type"`
-	Key    int8   `json:"key"`
-	Data   []byte `json:"data,omitempty"`
-	FromTs int64  `json:"from_ts,omitempty"`
-	ToTs   int64  `json:"to_ts,omitempty"`
+func (s *Store) Put(processor int8, payment models.PaymentRequest) {
+	s.data[processor] = append(s.data[processor], payment)
 }
 
-func (c *MemClient) dial() (net.Conn, error) {
-	conn, err := net.Dial("unix", c.SocketPath)
-	if err != nil {
-		return nil, fmt.Errorf("dial unix socket %s: %w", c.SocketPath, err)
-	}
-	if c.Timeout > 0 {
-		_ = conn.SetDeadline(time.Now().Add(c.Timeout))
-	}
-	return conn, nil
-}
+func (s *Store) RangeQuery(key int8, fromTs, toTs int64) ([]float32, error) {
+	values := s.data[key]
+	var amounts []float32
 
-func (c *MemClient) Put(key int8, data []byte) (err error) {
-	cmd := command{
-		Type: "put",
-		Data: data,
+	for _, p := range values {
+		timestamp := p.RequestedAt.UnixNano()
+
+		if timestamp >= fromTs && timestamp <= toTs {
+			amounts = append(amounts, p.Amount)
+		} else if timestamp > toTs {
+			break
+		}
 	}
 
-	if err := json.NewEncoder(c.Conn).Encode(cmd); err != nil {
-		return fmt.Errorf("encode put cmd: %w", err)
-	}
-	return
-}
-
-func (c *MemClient) RangeQuery(key int8, fromTs, toTs int64) (amounts []float32, err error) {
-	cmd := command{
-		Type:   "range",
-		Key:    key,
-		FromTs: fromTs,
-		ToTs:   toTs,
-	}
-
-	if err := json.NewEncoder(c.Conn).Encode(cmd); err != nil {
-		return nil, fmt.Errorf("encode range cmd: %w", err)
-	}
-
-	if err := json.NewDecoder(c.Conn).Decode(&amounts); err != nil {
-		return nil, fmt.Errorf("decode range resp: %w", err)
-	}
-	return
+	return amounts, nil
 }

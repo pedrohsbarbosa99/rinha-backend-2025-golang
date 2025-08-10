@@ -1,21 +1,4 @@
 services:
-  memdb:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    command: ["./memdb"]
-    volumes:
-      - memsock:/tmp
-    networks:
-      - backend
-      - payment-processor
-    deploy:
-      resources:
-        limits:
-          cpus: "0.3"
-          memory: 60M
-    restart: unless-stopped
-
   app1:
     build:
       context: .
@@ -27,19 +10,21 @@ services:
       - backend
       - payment-processor
     environment:
-      - MEMDB_SOCKET=/tmp/kvstore.sock
-      - PROCESSOR_DEFAULT_URL=http://payment-processor-default:8080
-      - PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080
-    depends_on:
-      - memdb
+      - SOCKET_PATH=/tmp/api1.sock
+      - OTHER_SOCKET_PATH=/tmp/api2.sock
+      - SUMMARY_URL=http://app2:8080/internal/payments-summary
+      - PROCESSOR_DEFAULT_URL=http://payment-processor-default:8080/payments
+      - PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080/payments
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 140M
+          cpus: "0.7"
+          memory: 70M
     restart: unless-stopped
 
   app2:
+    ports:
+      - "6060:6060"
     build:
       context: .
       dockerfile: Dockerfile
@@ -50,16 +35,16 @@ services:
       - backend
       - payment-processor
     environment:
-      - MEMDB_SOCKET=/tmp/kvstore.sock
-      - PROCESSOR_DEFAULT_URL=http://payment-processor-default:8080
-      - PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080
-    depends_on:
-      - memdb
+      - SOCKET_PATH=/tmp/api2.sock
+      - OTHER_SOCKET_PATH=/tmp/api1.sock
+      - SUMMARY_URL=http://app1:8080/internal/payments-summary
+      - PROCESSOR_DEFAULT_URL=http://payment-processor-default:8080/payments
+      - PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080/payments
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 140M
+          cpus: "0.7"
+          memory: 70M
     restart: unless-stopped
 
   nginx:
@@ -69,6 +54,7 @@ services:
       - "9999:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - memsock:/tmp
     depends_on:
       - app1
       - app2
@@ -78,8 +64,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.2"
-          memory: 30M
+          cpus: "0.1"
+          memory: 210M
     restart: unless-stopped
 
 volumes:

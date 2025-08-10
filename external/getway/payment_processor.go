@@ -6,7 +6,6 @@ import (
 	"io"
 
 	"errors"
-	"fmt"
 	"net/http"
 
 	goJson "github.com/goccy/go-json"
@@ -25,7 +24,7 @@ func PostPayment(client *http.Client, p models.PaymentRequest, url string) (err 
 	}
 
 	res, err := client.Post(
-		fmt.Sprintf("%s/payments", url),
+		url,
 		"application/json",
 		bytes.NewBuffer(payload),
 	)

@@ -1,52 +1,49 @@
 package processor
 
 import (
-	"bytes"
-	"encoding/binary"
 	"gorinha/internal/database"
 	"gorinha/internal/models"
 	"net/http"
+	"sync"
 	"time"
 
 	goJson "github.com/goccy/go-json"
 )
 
-var queue chan models.PaymentRequest
+func AddToQueue(pendingQueue chan []byte, queue chan *models.PaymentRequest, paymentPool *sync.Pool) {
+	for {
+		body := <-pendingQueue
+		p := paymentPool.Get().(*models.PaymentRequest)
 
-func AddToQueue(body []byte) {
-	var p models.PaymentRequest
-	err := goJson.Unmarshal(body, &p)
-	if err != nil {
-		return
+		*p = models.PaymentRequest{}
+
+		goJson.Unmarshal(body, p)
+		p.RequestedAt = time.Now().UTC()
+
+		queue <- p
+
 	}
-	p.RequestedAt = time.Now().UTC()
-
-	queue <- p
-
 }
 
-func WorkerPayments(paymentPending chan models.Payment) {
+func WorkerPayments(db *database.Store, queue chan *models.PaymentRequest, paymentPool *sync.Pool) {
 	httpClient := &http.Client{Timeout: 4 * time.Second}
-
-	queue = make(chan models.PaymentRequest, 5_000)
 
 	for {
 		payment := <-queue
-		processPayment(httpClient, payment, paymentPending)
-
-	}
-}
-
-func WorkerDatabase(db *database.MemClient, paymentPending chan models.Payment) {
-	for {
-		payment := <-paymentPending
-
-		var buf bytes.Buffer
-
-		binary.Write(&buf, binary.BigEndian, payment.RequestedAt.UnixNano())
-		binary.Write(&buf, binary.BigEndian, payment.Amount)
-		data := buf.Bytes()
-		db.Put(payment.Processor, data)
+		processor, err := processPayment(httpClient, *payment)
+		if err != nil {
+			paymentPool.Put(payment)
+			time.Sleep(time.Second)
+			queue <- &models.PaymentRequest{
+				CorrelationId: payment.CorrelationId,
+				Amount:        payment.Amount,
+				RequestedAt:   payment.RequestedAt,
+				Err:           true,
+			}
+			continue
+		}
+		db.Put(processor, *payment)
+		paymentPool.Put(payment)
 
 	}
 }

@@ -1,87 +1,45 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"gorinha/internal/config"
 	"gorinha/internal/database"
 	"gorinha/internal/models"
 	"gorinha/internal/processor"
+	"gorinha/internal/service"
+	"io"
+	"net"
+	"net/http"
+	"os"
+	"sync"
 	"time"
 
-	"github.com/fasthttp/router"
-	"github.com/redis/go-redis/v9"
 	"github.com/valyala/fasthttp"
 )
 
-var client *redis.Client
-var db *database.MemClient
-
-var paymentPending chan models.Payment
+var pendingQueue chan []byte
+var db = database.NewStore()
 
 func PostPayments(ctx *fasthttp.RequestCtx) {
 	ctx.SetStatusCode(fasthttp.StatusAccepted)
 	body := ctx.PostBody()
-	go processor.AddToQueue(body)
+	pendingQueue <- body
 
 }
 
-type Summary struct {
-	TotalRequests int     `json:"totalRequests"`
-	TotalAmount   float32 `json:"totalAmount"`
-}
-
-func GetSummary(ctx *fasthttp.RequestCtx) {
-	summary := map[string]*Summary{
-		"default":  {TotalRequests: 0, TotalAmount: 0},
-		"fallback": {TotalRequests: 0, TotalAmount: 0},
-	}
+func GetSummaryInternal(ctx *fasthttp.RequestCtx) {
 	fromStr := string(ctx.QueryArgs().Peek("from"))
 	toStr := string(ctx.QueryArgs().Peek("to"))
 
-	from := int64(0)
-	to := time.Date(2400, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
-
-	if fromStr != "" {
-		t, err := time.Parse(time.RFC3339Nano, fromStr)
-		if err == nil {
-			from = t.UnixNano()
-		}
-	}
-
-	if toStr != "" {
-		t, err := time.Parse(time.RFC3339Nano, toStr)
-		if err == nil {
-			to = t.UnixNano()
-		}
-	}
-
-	data, err := db.RangeQuery(0, from, to)
-
-	if err != nil {
-		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
-		ctx.SetBodyString(`{"error": "failed to fetch data"}`)
-		return
-	}
-
-	summary["default"].TotalRequests = len(data)
-	for _, amount := range data {
-		summary["default"].TotalAmount += amount
-
-	}
-
-	data, err = db.RangeQuery(2, from, to)
+	summary, err := service.GetSummary(db, fromStr, toStr)
 
 	if err != nil {
 		fmt.Println(err.Error())
 		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
 		ctx.SetBodyString(`{"error": "failed to fetch data"}`)
 		return
-	}
-
-	summary["fallback"].TotalRequests = len(data)
-	for _, amount := range data {
-		summary["fallback"].TotalAmount += amount
-
 	}
 
 	resp, err := json.Marshal(summary)
@@ -97,25 +55,112 @@ func GetSummary(ctx *fasthttp.RequestCtx) {
 	ctx.SetBody(resp)
 }
 
+func newUnixSocketClient() *http.Client {
+	dialer := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		return net.Dial("unix", config.OTHER_SOCKET_PATH)
+	}
+
+	transport := &http.Transport{
+		DialContext: dialer,
+	}
+
+	return &http.Client{
+		Transport: transport,
+		Timeout:   5 * time.Second,
+	}
+}
+
+func GetSummary(ctx *fasthttp.RequestCtx) {
+	summaryOther := map[string]*models.Summary{
+		"default":  {TotalRequests: 0, TotalAmount: 0},
+		"fallback": {TotalRequests: 0, TotalAmount: 0},
+	}
+	fromStr := string(ctx.QueryArgs().Peek("from"))
+	toStr := string(ctx.QueryArgs().Peek("to"))
+
+	summary, err := service.GetSummary(db, fromStr, toStr)
+	if err != nil {
+		fmt.Println(err.Error())
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+		ctx.SetBodyString(`{"error": "failed to fetch data"}`)
+		return
+	}
+
+	client := newUnixSocketClient()
+	req, err := http.NewRequest("GET", config.SUMMARY_URL, nil)
+	values := req.URL.Query()
+	values.Add("from", fromStr)
+	values.Add("to", toStr)
+
+	req.URL.RawQuery = values.Encode()
+
+	res, err := client.Do(req)
+	if err != nil {
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+		ctx.SetBodyString(`{"error": "internal error"}`)
+		return
+	}
+	defer res.Body.Close()
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+		ctx.SetBodyString(`{"error": "internal error"}`)
+		return
+	}
+	if err := json.Unmarshal(body, &summaryOther); err != nil {
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+		ctx.SetBodyString(`{"error": "internal error"}`)
+		return
+	}
+
+	summary["default"].TotalRequests += summaryOther["default"].TotalRequests
+	summary["default"].TotalAmount += summaryOther["default"].TotalAmount
+
+	summary["fallback"].TotalRequests += summaryOther["fallback"].TotalRequests
+	summary["fallback"].TotalAmount += summaryOther["fallback"].TotalAmount
+
+	resp, err := json.Marshal(summary)
+	if err != nil {
+		fmt.Println(err.Error())
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+		ctx.SetBodyString(`{"error": "internal error"}`)
+		return
+	}
+
+	ctx.SetContentType("application/json")
+	ctx.SetStatusCode(fasthttp.StatusOK)
+	ctx.SetBody(resp)
+}
+
+func handler(ctx *fasthttp.RequestCtx) {
+	switch string(ctx.Path()) {
+	case "/payments":
+		PostPayments(ctx)
+	case "/payments-summary":
+		GetSummary(ctx)
+	case "/internal/payments-summary":
+		GetSummaryInternal(ctx)
+	}
+}
+
 func main() {
-	paymentPending = make(chan models.Payment, 100_000)
+	var paymentPool = sync.Pool{
+		New: func() any {
+			return new(models.PaymentRequest)
+		},
+	}
 
-	// client = redis.NewClient(&redis.Options{
-	// 	Addr:           config.REDIS_URL,
-	// 	Password:       "",
-	// 	DB:             0,
-	// 	Protocol:       2,
-	// 	MaxActiveConns: 100,
-	// })
-	db = database.NewMemClient()
-	go processor.WorkerPayments(paymentPending)
-	go processor.WorkerDatabase(db, paymentPending)
+	pendingQueue = make(chan []byte, 20_000)
+	queue := make(chan *models.PaymentRequest, 20_000)
 
-	r := router.New()
-	r.POST("/payments", PostPayments)
-	r.GET("/payments-summary", GetSummary)
+	os.Remove(config.SOCKET_PATH)
 
-	if err := fasthttp.ListenAndServe(":8080", r.Handler); err != nil {
+	go processor.AddToQueue(pendingQueue, queue, &paymentPool)
+	go processor.WorkerPayments(db, queue, &paymentPool)
+
+	err := fasthttp.ListenAndServeUNIX(config.SOCKET_PATH, 0777, handler)
+	if err != nil {
 		panic(err)
 	}
+
 }
