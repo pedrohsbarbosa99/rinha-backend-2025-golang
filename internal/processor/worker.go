@@ -15,7 +15,9 @@ func AddToQueue(pendingQueue chan []byte, queue chan *models.PaymentRequest, pay
 		body := <-pendingQueue
 		p := paymentPool.Get().(*models.PaymentRequest)
 
-		*p = models.PaymentRequest{}
+		p.CorrelationId = ""
+		p.Amount = 0
+		p.Err = false
 
 		goJson.Unmarshal(body, p)
 		p.RequestedAt = time.Now().UTC()
@@ -30,16 +32,10 @@ func WorkerPayments(db *database.Store, queue chan *models.PaymentRequest, payme
 
 	for {
 		payment := <-queue
-		processor, err := processPayment(httpClient, *payment)
+		processor, err := processPayment(httpClient, payment)
 		if err != nil {
-			queue <- &models.PaymentRequest{
-				CorrelationId: payment.CorrelationId,
-				Amount:        payment.Amount,
-				RequestedAt:   payment.RequestedAt,
-				Err:           true,
-			}
-			paymentPool.Put(payment)
-			time.Sleep(time.Second)
+			payment.Err = true
+			queue <- payment
 			continue
 		}
 		db.Put(processor, *payment)

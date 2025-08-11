@@ -9,7 +9,6 @@ import (
 	"gorinha/internal/models"
 	"gorinha/internal/processor"
 	"gorinha/internal/service"
-	"io"
 	"net"
 	"net/http"
 	"os"
@@ -22,11 +21,15 @@ import (
 var pendingQueue chan []byte
 var db = database.NewStore()
 
-func PostPayments(ctx *fasthttp.RequestCtx) {
-	ctx.SetStatusCode(fasthttp.StatusAccepted)
-	body := ctx.PostBody()
-	pendingQueue <- body
-
+var unixClient = &http.Client{
+	Transport: &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return net.Dial("unix", config.OTHER_SOCKET_PATH)
+		},
+		MaxIdleConns:    100,
+		IdleConnTimeout: 90 * time.Second,
+	},
+	Timeout: 3 * time.Second,
 }
 
 func GetSummaryInternal(ctx *fasthttp.RequestCtx) {
@@ -55,21 +58,6 @@ func GetSummaryInternal(ctx *fasthttp.RequestCtx) {
 	ctx.SetBody(resp)
 }
 
-func newUnixSocketClient() *http.Client {
-	dialer := func(ctx context.Context, network, addr string) (net.Conn, error) {
-		return net.Dial("unix", config.OTHER_SOCKET_PATH)
-	}
-
-	transport := &http.Transport{
-		DialContext: dialer,
-	}
-
-	return &http.Client{
-		Transport: transport,
-		Timeout:   5 * time.Second,
-	}
-}
-
 func GetSummary(ctx *fasthttp.RequestCtx) {
 	summaryOther := map[string]*models.Summary{
 		"default":  {TotalRequests: 0, TotalAmount: 0},
@@ -86,7 +74,6 @@ func GetSummary(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	client := newUnixSocketClient()
 	req, err := http.NewRequest("GET", config.SUMMARY_URL, nil)
 	values := req.URL.Query()
 	values.Add("from", fromStr)
@@ -94,20 +81,15 @@ func GetSummary(ctx *fasthttp.RequestCtx) {
 
 	req.URL.RawQuery = values.Encode()
 
-	res, err := client.Do(req)
+	res, err := unixClient.Do(req)
 	if err != nil {
 		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
 		ctx.SetBodyString(`{"error": "internal error"}`)
 		return
 	}
 	defer res.Body.Close()
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
-		ctx.SetBodyString(`{"error": "internal error"}`)
-		return
-	}
-	if err := json.Unmarshal(body, &summaryOther); err != nil {
+	dec := json.NewDecoder(res.Body)
+	if err := dec.Decode(&summaryOther); err != nil {
 		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
 		ctx.SetBodyString(`{"error": "internal error"}`)
 		return
@@ -135,7 +117,9 @@ func GetSummary(ctx *fasthttp.RequestCtx) {
 func handler(ctx *fasthttp.RequestCtx) {
 	switch string(ctx.Path()) {
 	case "/payments":
-		PostPayments(ctx)
+		ctx.SetStatusCode(fasthttp.StatusAccepted)
+		body := ctx.PostBody()
+		pendingQueue <- body
 	case "/payments-summary":
 		GetSummary(ctx)
 	case "/internal/payments-summary":

@@ -9,7 +9,7 @@ import (
 
 func processPayment(
 	client *http.Client,
-	p models.PaymentRequest,
+	p *models.PaymentRequest,
 ) (processor int8, err error) {
 	err = getway.PostPayment(
 		client,

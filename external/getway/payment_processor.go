@@ -11,7 +11,7 @@ import (
 	goJson "github.com/goccy/go-json"
 )
 
-func PostPayment(client *http.Client, p models.PaymentRequest, url string) (err error) {
+func PostPayment(client *http.Client, p *models.PaymentRequest, url string) (err error) {
 	data := map[string]any{
 		"correlationId": p.CorrelationId,
 		"amount":        p.Amount,
