@@ -32,14 +32,14 @@ func WorkerPayments(db *database.Store, queue chan *models.PaymentRequest, payme
 		payment := <-queue
 		processor, err := processPayment(httpClient, *payment)
 		if err != nil {
-			paymentPool.Put(payment)
-			time.Sleep(time.Second)
 			queue <- &models.PaymentRequest{
 				CorrelationId: payment.CorrelationId,
 				Amount:        payment.Amount,
 				RequestedAt:   payment.RequestedAt,
 				Err:           true,
 			}
+			paymentPool.Put(payment)
+			time.Sleep(time.Second)
 			continue
 		}
 		db.Put(processor, *payment)
