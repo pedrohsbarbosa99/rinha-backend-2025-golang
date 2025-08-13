@@ -60,6 +60,7 @@ func GetSummaryInternal(ctx *fasthttp.RequestCtx) {
 }
 
 func GetSummary(ctx *fasthttp.RequestCtx) {
+	time.Sleep(10 * time.Millisecond)
 	summaryOther := map[string]*models.Summary{
 		"default":  {TotalRequests: 0, TotalAmount: 0},
 		"fallback": {TotalRequests: 0, TotalAmount: 0},
