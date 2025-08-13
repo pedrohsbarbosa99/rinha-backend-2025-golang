@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -131,15 +132,15 @@ var BodyPool = sync.Pool{
 }
 
 func handler(ctx *fasthttp.RequestCtx) {
-	switch string(ctx.Path()) {
-	case "/payments":
+	switch {
+	case bytes.Equal(ctx.Path(), []byte("/payments")):
 		ctx.SetStatusCode(fasthttp.StatusAccepted)
 		buffer := BodyPool.Get().([]byte)[:0]
-		buffer = append(buffer, ctx.PostBody()...)
+		buffer = ctx.Request.Body()
 		pendingQueue <- buffer
-	case "/payments-summary":
+	case bytes.Equal(ctx.Path(), []byte("/payments-summary")):
 		GetSummary(ctx)
-	case "/internal/payments-summary":
+	case bytes.Equal(ctx.Path(), []byte("/internal/payments-summary")):
 		GetSummaryInternal(ctx)
 	}
 }
@@ -159,7 +160,13 @@ func main() {
 	go processor.AddToQueue(pendingQueue, queue, &paymentPool, &BodyPool)
 	go processor.WorkerPayments(db, queue, &paymentPool)
 
-	err := fasthttp.ListenAndServeUNIX(config.SOCKET_PATH, 0777, handler)
+	srv := &fasthttp.Server{
+		Handler:                       handler,
+		DisableHeaderNamesNormalizing: true,
+		DisablePreParseMultipartForm:  true,
+	}
+
+	err := srv.ListenAndServeUNIX(config.SOCKET_PATH, 0777)
 	if err != nil {
 		panic(err)
 	}
