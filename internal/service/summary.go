@@ -17,7 +17,7 @@ func GetSummary(
 	}
 
 	from := int64(0)
-	to := time.Date(2400, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
+	to := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC).UnixNano()
 
 	if fromStr != "" {
 		t, err := time.Parse(time.RFC3339Nano, fromStr)

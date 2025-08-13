@@ -9,6 +9,7 @@ import (
 	"gorinha/internal/models"
 	"gorinha/internal/processor"
 	"gorinha/internal/service"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -100,6 +101,13 @@ func GetSummary(ctx *fasthttp.RequestCtx) {
 
 	summary["fallback"].TotalRequests += summaryOther["fallback"].TotalRequests
 	summary["fallback"].TotalAmount += summaryOther["fallback"].TotalAmount
+
+	summary["default"].TotalAmount = float32(
+		math.Ceil(float64(summary["default"].TotalAmount)*10.0) / 10.0,
+	)
+	summary["fallback"].TotalAmount = float32(
+		math.Ceil(float64(summary["fallback"].TotalAmount)*10.0) / 10.0,
+	)
 
 	resp, err := json.Marshal(summary)
 	if err != nil {
