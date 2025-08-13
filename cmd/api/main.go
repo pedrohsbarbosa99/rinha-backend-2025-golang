@@ -114,12 +114,20 @@ func GetSummary(ctx *fasthttp.RequestCtx) {
 	ctx.SetBody(resp)
 }
 
+var BodyPool = sync.Pool{
+
+	New: func() any {
+		return make([]byte, 0, 100)
+	},
+}
+
 func handler(ctx *fasthttp.RequestCtx) {
 	switch string(ctx.Path()) {
 	case "/payments":
 		ctx.SetStatusCode(fasthttp.StatusAccepted)
-		body := ctx.PostBody()
-		pendingQueue <- body
+		buffer := BodyPool.Get().([]byte)[:0]
+		buffer = append(buffer, ctx.PostBody()...)
+		pendingQueue <- buffer
 	case "/payments-summary":
 		GetSummary(ctx)
 	case "/internal/payments-summary":
@@ -139,7 +147,7 @@ func main() {
 
 	os.Remove(config.SOCKET_PATH)
 
-	go processor.AddToQueue(pendingQueue, queue, &paymentPool)
+	go processor.AddToQueue(pendingQueue, queue, &paymentPool, &BodyPool)
 	go processor.WorkerPayments(db, queue, &paymentPool)
 
 	err := fasthttp.ListenAndServeUNIX(config.SOCKET_PATH, 0777, handler)

@@ -10,7 +10,12 @@ import (
 	goJson "github.com/goccy/go-json"
 )
 
-func AddToQueue(pendingQueue chan []byte, queue chan *models.PaymentRequest, paymentPool *sync.Pool) {
+func AddToQueue(
+	pendingQueue chan []byte,
+	queue chan *models.PaymentRequest,
+	paymentPool *sync.Pool,
+	BodyPool *sync.Pool,
+) {
 	for {
 		body := <-pendingQueue
 		p := paymentPool.Get().(*models.PaymentRequest)
@@ -20,9 +25,10 @@ func AddToQueue(pendingQueue chan []byte, queue chan *models.PaymentRequest, pay
 		p.Err = false
 
 		goJson.Unmarshal(body, p)
-		p.RequestedAt = time.Now().UTC()
 
+		p.RequestedAt = time.Now().UTC()
 		queue <- p
+		BodyPool.Put(body)
 
 	}
 }
