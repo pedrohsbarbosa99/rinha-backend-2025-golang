@@ -40,10 +40,11 @@ func GetSummary(
 	}
 
 	summary["default"].TotalRequests = len(data)
+	var total int64
 	for _, amount := range data {
-		summary["default"].TotalAmount += amount
-
+		total += amount
 	}
+	summary["default"].TotalAmount = float32(total) / 100
 
 	data, err = db.RangeQuery(2, from, to)
 
@@ -51,11 +52,12 @@ func GetSummary(
 		return
 	}
 
-	summary["fallback"].TotalRequests = len(data)
+	var total1 int64
 	for _, amount := range data {
-		summary["fallback"].TotalAmount += amount
-
+		total1 += amount
 	}
+	summary["fallback"].TotalRequests = len(data)
+	summary["fallback"].TotalAmount = float32(total1) / 100
 	return
 
 }

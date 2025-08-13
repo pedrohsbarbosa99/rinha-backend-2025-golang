@@ -10,7 +10,6 @@ import (
 	"gorinha/internal/models"
 	"gorinha/internal/processor"
 	"gorinha/internal/service"
-	"math"
 	"net"
 	"net/http"
 	"os"
@@ -61,7 +60,7 @@ func GetSummaryInternal(ctx *fasthttp.RequestCtx) {
 }
 
 func GetSummary(ctx *fasthttp.RequestCtx) {
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 	summaryOther := map[string]*models.Summary{
 		"default":  {TotalRequests: 0, TotalAmount: 0},
 		"fallback": {TotalRequests: 0, TotalAmount: 0},
@@ -104,13 +103,6 @@ func GetSummary(ctx *fasthttp.RequestCtx) {
 	summary["fallback"].TotalRequests += summaryOther["fallback"].TotalRequests
 	summary["fallback"].TotalAmount += summaryOther["fallback"].TotalAmount
 
-	summary["default"].TotalAmount = float32(
-		math.Ceil(float64(summary["default"].TotalAmount)*10.0) / 10.0,
-	)
-	summary["fallback"].TotalAmount = float32(
-		math.Ceil(float64(summary["fallback"].TotalAmount)*10.0) / 10.0,
-	)
-
 	resp, err := json.Marshal(summary)
 	if err != nil {
 		fmt.Println(err.Error())
@@ -136,7 +128,7 @@ func handler(ctx *fasthttp.RequestCtx) {
 	case bytes.Equal(ctx.Path(), []byte("/payments")):
 		ctx.SetStatusCode(fasthttp.StatusAccepted)
 		buffer := BodyPool.Get().([]byte)[:0]
-		buffer = ctx.Request.Body()
+		buffer = append(buffer, ctx.PostBody()...)
 		pendingQueue <- buffer
 	case bytes.Equal(ctx.Path(), []byte("/payments-summary")):
 		GetSummary(ctx)
