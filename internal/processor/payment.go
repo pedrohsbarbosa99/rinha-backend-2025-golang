@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-func processPayment(
+func ProcessPayment(
 	client *http.Client,
 	p *models.PaymentRequest,
 ) (processor int8, err error) {

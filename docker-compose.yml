@@ -1,4 +1,23 @@
 services:
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["./memdb"]
+    environment:
+      - SOCKET_PATH=/tmp/db.sock
+    volumes:
+      - memsock:/tmp
+    networks:
+      - backend
+      - payment-processor
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 60M
+    restart: unless-stopped
+
   app1:
     build:
       context: .
@@ -7,16 +26,18 @@ services:
     networks:
       - backend
       - payment-processor
+    volumes:
+      - memsock:/tmp
+    depends_on:
+      - worker
     environment:
-      - SOCKET_PATH=/tmp/api1.sock
-      - OTHER_SOCKET_PATH=/tmp/api2.sock
-      - SUMMARY_URL=http://app2:8080/internal/payments-summary
+      - SOCKET_PATH=/tmp/db.sock
       - PROCESSOR_DEFAULT_URL=http://payment-processor-default:8080/payments
       - PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080/payments
     deploy:
       resources:
         limits:
-          cpus: "0.6"
+          cpus: "0.5"
           memory: 70M
     restart: unless-stopped
 
@@ -30,16 +51,18 @@ services:
     networks:
       - backend
       - payment-processor
+    volumes:
+      - memsock:/tmp
+    depends_on:
+      - worker
     environment:
-      - SOCKET_PATH=/tmp/api2.sock
-      - OTHER_SOCKET_PATH=/tmp/api1.sock
-      - SUMMARY_URL=http://app1:8080/internal/payments-summary
+      - SOCKET_PATH=/tmp/db.sock
       - PROCESSOR_DEFAULT_URL=http://payment-processor-default:8080/payments
       - PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080/payments
     deploy:
       resources:
         limits:
-          cpus: "0.6"
+          cpus: "0.5"
           memory: 70M
     restart: unless-stopped
 
@@ -59,9 +82,13 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.3"
+          cpus: "0.2"
           memory: 210M
     restart: unless-stopped
+
+volumes:
+  memsock:
+
 
 networks:
   backend:
