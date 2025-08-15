@@ -117,12 +117,10 @@ var BodyPool = sync.Pool{
 func handler(ctx *fasthttp.RequestCtx) {
 	switch {
 	case bytes.Equal(ctx.Path(), []byte("/payments")):
-		go func() {
-			buffer := BodyPool.Get().([]byte)[:0]
-			buffer = append(buffer, ctx.PostBody()...)
-			pendingQueue <- buffer
-		}()
 		ctx.SetStatusCode(fasthttp.StatusAccepted)
+		buffer := BodyPool.Get().([]byte)[:0]
+		buffer = append(buffer, ctx.PostBody()...)
+		pendingQueue <- buffer
 	case bytes.Equal(ctx.Path(), []byte("/payments-summary")):
 		GetSummary(ctx)
 	case bytes.Equal(ctx.Path(), []byte("/internal/payments-summary")):
