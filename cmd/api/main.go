@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"gorinha/internal/config"
@@ -10,7 +9,6 @@ import (
 	"gorinha/internal/models"
 	"gorinha/internal/processor"
 	"gorinha/internal/service"
-	"net"
 	"net/http"
 	"os"
 	"sync"
@@ -22,14 +20,7 @@ import (
 var pendingQueue chan []byte
 var db = database.NewStore()
 
-var unixClient = &http.Client{
-	Transport: &http.Transport{
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			return net.Dial("unix", config.OTHER_SOCKET_PATH)
-		},
-		MaxIdleConns:    100,
-		IdleConnTimeout: 90 * time.Second,
-	},
+var httpClient = &http.Client{
 	Timeout: 3 * time.Second,
 }
 
@@ -83,7 +74,7 @@ func GetSummary(ctx *fasthttp.RequestCtx) {
 
 	req.URL.RawQuery = values.Encode()
 
-	res, err := unixClient.Do(req)
+	res, err := httpClient.Do(req)
 	if err != nil {
 		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
 		ctx.SetBodyString(`{"error": "internal error"}`)
@@ -158,7 +149,7 @@ func main() {
 		DisablePreParseMultipartForm:  true,
 	}
 
-	err := srv.ListenAndServeUNIX(config.SOCKET_PATH, 0777)
+	err := srv.ListenAndServe(":8080")
 	if err != nil {
 		panic(err)
 	}

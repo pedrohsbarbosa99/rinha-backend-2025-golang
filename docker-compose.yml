@@ -4,8 +4,6 @@ services:
       context: .
       dockerfile: Dockerfile
     command: ["./main"]
-    volumes:
-      - memsock:/tmp
     networks:
       - backend
       - payment-processor
@@ -29,8 +27,6 @@ services:
       context: .
       dockerfile: Dockerfile
     command: ["./main"]
-    volumes:
-      - memsock:/tmp
     networks:
       - backend
       - payment-processor
@@ -47,14 +43,13 @@ services:
           memory: 70M
     restart: unless-stopped
 
-  nginx:
-    image: nginx:latest
-    container_name: nginx-1
+  haproxy:
+    image: haproxy:latest
+    container_name: haproxy-dev
     ports:
       - "9999:80"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - memsock:/tmp
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     depends_on:
       - app1
       - app2
@@ -67,9 +62,6 @@ services:
           cpus: "0.3"
           memory: 210M
     restart: unless-stopped
-
-volumes:
-  memsock:
 
 networks:
   backend:
