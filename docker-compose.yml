@@ -9,11 +9,15 @@ services:
     networks:
       - backend
       - payment-processor
+    environment:
+      - MEMDB_SOCKET=/tmp/kvstore.sock
+      - PROCESSOR_DEFAULT_URL=http://payment-processor-default:8080
+      - PROCESSOR_FALLBACK_URL=http://payment-processor-fallback:8080
     deploy:
       resources:
         limits:
           cpus: "0.3"
-          memory: 60M
+          memory: 100M
     restart: unless-stopped
 
   app1:
@@ -36,7 +40,7 @@ services:
       resources:
         limits:
           cpus: "0.5"
-          memory: 140M
+          memory: 50M
     restart: unless-stopped
 
   app2:
@@ -59,7 +63,7 @@ services:
       resources:
         limits:
           cpus: "0.5"
-          memory: 140M
+          memory: 50M
     restart: unless-stopped
 
   nginx:
@@ -79,7 +83,7 @@ services:
       resources:
         limits:
           cpus: "0.2"
-          memory: 30M
+          memory: 50M
     restart: unless-stopped
 
 volumes:

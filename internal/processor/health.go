@@ -14,8 +14,6 @@ type HealthReturn struct {
 	Processor       string
 }
 
-var processorHealth HealthReturn
-
 func GetHealth(url string) (h HealthReturn) {
 	fullURL := fmt.Sprintf("%s/payments/service-health", url)
 
@@ -39,25 +37,21 @@ func GetHealth(url string) (h HealthReturn) {
 	return
 }
 
-func ChoiceProcessor() (health HealthReturn) {
+func ChoiceProcessor() HealthReturn {
 	healthDefault := GetHealth("http://payment-processor-default:8080")
-	health.Url = "http://payment-processor-default:8080"
-	health.Processor = "default"
-	health.Failing = healthDefault.Failing
+	healthFallback := GetHealth("http://payment-processor-fallback:8080")
 
-	// if !healthDefault.Failing {
-	// 	if healthDefault.MinResponseTime < 130 {
-	// 		return
-	// 	}
-	// }
-	return
-}
-
-func WorkerChecker() {
-
-	for {
-		processorHealth = ChoiceProcessor()
-		fmt.Println(processorHealth.Failing, processorHealth.Processor)
-
+	if healthDefault.Failing ||
+		float64(healthDefault.MinResponseTime) > 1.3*float64(healthFallback.MinResponseTime) {
+		healthFallback.Url = "http://payment-processor-fallback:8080"
+		return healthFallback
 	}
+
+	if healthFallback.Failing {
+		healthDefault.Url = "http://payment-processor-default:8080"
+		return healthDefault
+	}
+
+	healthDefault.Url = "http://payment-processor-default:8080"
+	return healthDefault
 }

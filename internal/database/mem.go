@@ -3,6 +3,7 @@ package database
 import (
 	"encoding/json"
 	"fmt"
+	"gorinha/internal/models"
 	"net"
 	"os"
 	"time"
@@ -23,7 +24,7 @@ func NewMemClient() *MemClient {
 	}
 	c := MemClient{
 		SocketPath: path,
-		Timeout:    200 * time.Second,
+		Timeout:    500 * time.Second,
 	}
 	conn, err := c.dial()
 	if err == nil {
@@ -33,11 +34,12 @@ func NewMemClient() *MemClient {
 }
 
 type command struct {
-	Type   string `json:"type"`
-	Key    int8   `json:"key"`
-	Data   []byte `json:"data,omitempty"`
-	FromTs int64  `json:"from_ts,omitempty"`
-	ToTs   int64  `json:"to_ts,omitempty"`
+	Type    string                `json:"type"`
+	Key     int8                  `json:"key"`
+	Payment models.PaymentRequest `json:"payment"`
+	Data    []byte                `json:"data"`
+	FromTs  int64                 `json:"from_ts,omitempty"`
+	ToTs    int64                 `json:"to_ts,omitempty"`
 }
 
 func (c *MemClient) dial() (net.Conn, error) {
@@ -51,10 +53,10 @@ func (c *MemClient) dial() (net.Conn, error) {
 	return conn, nil
 }
 
-func (c *MemClient) Put(key int8, data []byte) (err error) {
+func (c *MemClient) Enqueue(body []byte) (err error) {
 	cmd := command{
-		Type: "put",
-		Data: data,
+		Type: "enqueue",
+		Data: body,
 	}
 
 	if err := json.NewEncoder(c.Conn).Encode(cmd); err != nil {
@@ -63,7 +65,19 @@ func (c *MemClient) Put(key int8, data []byte) (err error) {
 	return
 }
 
-func (c *MemClient) RangeQuery(key int8, fromTs, toTs int64) (amounts []float32, err error) {
+func (c *MemClient) Put(key int8, payment models.PaymentRequest) (err error) {
+	cmd := command{
+		Type:    "put",
+		Payment: payment,
+	}
+
+	if err := json.NewEncoder(c.Conn).Encode(cmd); err != nil {
+		return fmt.Errorf("encode put cmd: %w", err)
+	}
+	return
+}
+
+func (c *MemClient) RangeQuery(key int8, fromTs, toTs int64) (amounts []int64, err error) {
 	cmd := command{
 		Type:   "range",
 		Key:    key,
